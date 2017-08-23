@@ -411,13 +411,19 @@ static void env_clear(void)
   memset(env, 0, sizeof(env));
 }
 
-#define RES   10000 /* Series resistor in Ohm */
-#define REFV  3300  /* Reference voltage in mV */
+#define RES     10000UL /* Series resistor in Ohm */
+#define REFV    3300UL  /* Reference voltage in mV */
+#define BETA    3435.0f
+#define NOMTEMP 25.0f
 
 int cmd_adc(int argc, char *argv[])
 {
   uint16_t val;
   uint32_t voltage;
+  uint32_t tmp;
+  uint32_t resistance;
+  float tmp2;
+  float temp;
 
   /* Start conversion */
   ADCSRA |= (1 << ADSC);
@@ -427,8 +433,26 @@ int cmd_adc(int argc, char *argv[])
   val = ADC;
   prints("ADC Value: %u\r\n", val);
   
-  voltage = 3300UL * (uint32_t)val * 1000UL / 1023UL; /* Voltage in mV */
+  voltage = 3300UL * (uint32_t)val / 1023UL; /* Voltage in mV */
   prints("Voltage: %lu mV\r\n", voltage);
+
+  tmp = (1023UL * 1000UL / val) - 1000UL;
+  resistance = 1000UL * RES / tmp;
+
+  prints("Resistance: %lu Ohm\r\n", resistance);
+
+  tmp2 = 1023.0f / (float)val - 1.0f;
+  tmp2 = RES / tmp2;
+
+  temp = tmp2 / (float)RES;
+  temp = log(temp);
+  temp /= BETA;
+  temp += 1.0f / (NOMTEMP + 273.15f);
+  temp = 1.0f / temp;
+  temp -= 273.15f;
+
+  prints("Temperature: %d\r\n", (int)round(temp));
+
 
   //res = RES / ((1023 / val) - 1); /* Scale this to be integer compatible */
 
