@@ -447,6 +447,9 @@ int cmd_adc(int argc, char *argv[])
 
   prints("Resistance: %lu Ohm\r\n", resistance);
 
+  /* This code is pretty much taken directly from adafruits article on
+   * using a thermistor.
+   */
   tmp2 = 1023.0f / (float)val - 1.0f;
   tmp2 = RES / tmp2;
 
