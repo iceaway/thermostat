@@ -1,4 +1,6 @@
 #include "ctrl.h"
+#include "env.h"
+#include "main.h"
 
 enum heater_state {
   HEATER_OFF,

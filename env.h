@@ -1,5 +1,6 @@
 #ifndef __ENV_H
 #define __ENV_H
+#include <stdlib.h>
 
 void env_clear(void);
 int env_set(char const *var, char const *val);

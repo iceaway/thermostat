@@ -92,6 +92,7 @@ int env_set(char const *var, char const *val)
     prints("Environment is full\r\n");
     return 0;
   } else if (varlen > 0) {
+    env_save();
     return snprintf(env+strlen(env), ENV_SIZE - strlen(env), "%s=%s;", var, val);
   } else {
     prints("No variable given\r\n");

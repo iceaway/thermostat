@@ -8,6 +8,8 @@
 #include "rbuf.h"
 #include "ctrl.h"
 #include "env.h"
+#include "adc.h"
+#include "temperature.h"
 
 #define PRINTS_BUFSIZE  128
 #define MAX_ARGC        8 
@@ -19,13 +21,6 @@
 
 #define ASCII_DEL  0x7F
 #define ASCII_BS   0x08
-
-/* NTC values */
-#define RES     10000UL /* Series resistor in Ohm */
-#define REFV    3300UL  /* Reference voltage in mV */
-#define BETA    3435.0f /* Beta coefficient for steinhart equation */
-#define NOMTEMP 25.0f   /* Nominal temperature of temp sensor */
-
 
 struct cmd {
   char const * const cmd;
@@ -286,45 +281,24 @@ int cmd_adc(int argc, char *argv[])
   uint32_t voltage;
   uint32_t tmp;
   uint32_t resistance;
-  float tmp2;
   float temp;
 
-  /* Start conversion */
-  ADCSRA |= (1 << ADSC);
-
-  while (!(ADCSRA & (1 << ADIF))) { }
-
-  val = ADC;
+  val = adc_get();
   prints("ADC Value: %u\r\n", val);
   
   voltage = 3300UL * (uint32_t)val / 1023UL; /* Voltage in mV */
   prints("Voltage: %lu mV\r\n", voltage);
 
   tmp = (1023UL * 1000UL / val) - 1000UL;
-  resistance = 1000UL * RES / tmp;
+  resistance = 1000UL * 10000UL  / tmp;
 
   prints("Resistance: %lu Ohm\r\n", resistance);
 
-  /* This code is pretty much taken directly from adafruits article on
-   * using a thermistor.
-   */
-  tmp2 = 1023.0f / (float)val - 1.0f;
-  tmp2 = RES / tmp2;
+  temp = adc2temp(val);
 
-  temp = tmp2 / (float)RES;
-  temp = log(temp);
-  temp /= BETA;
-  temp += 1.0f / (NOMTEMP + 273.15f);
-  temp = 1.0f / temp;
-  temp -= 273.15f;
-
-  prints("Temperature: %d\r\n", (int)round(temp));
-
-
-  //res = RES / ((1023 / val) - 1); /* Scale this to be integer compatible */
+  prints("Temperature: %d\r\n", (int)round(temp*10));
 
   return 0;
-
 }
 
 int cmd_ramdump(int argc, char *argv[])
@@ -920,17 +894,6 @@ static void echo(char data)
   }
 }
 
-static void init_adc(void)
-{
-  /* PF0 = Analog pin = A0 */
-
-  /* Enable ADC */
-  ADCSRA = (1 << ADEN);
-
-  /* Set prescaler to clk/128 to get ADC Clock of 125 kHz */
-  ADCSRA |= (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
-}
-
 static void init_wd(void)
 {
   /* CTC Mode, OCR0A = 250 */
@@ -1031,13 +994,13 @@ int main(void)
   init_gpio();
   init_wd();
   init_usart();
-  init_adc();
+  adc_init();
 
   /* Enable interrupts globally */
   sei(); 
 
   /* Restore the environment from EEPROM */
-  env_restore();
+  //env_restore(); /* TODO: This halts execution? */
 
   prints("\r\nWelcome to PellShell\r\n");
   prints(">> ");
