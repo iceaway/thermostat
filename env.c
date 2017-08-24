@@ -1,8 +1,11 @@
 #include <string.h>
+#include <stdio.h>
+#include <avr/eeprom.h>
 #include "env.h"
 #include "main.h"
 
 #define ENV_SIZE        128
+#define EEPROM_INIT     0xAA
 
 #define MIN(a,b)  ((a) < (b) ? (a) : (b))
 
@@ -21,7 +24,7 @@ static char env[ENV_SIZE] = { 0 };
 *   size      - Size of the value buffer
 *
 * Returned Value:
-*   0 - Failure
+* <=0 - Failure
 *  >0 - Length of the returned string 
 *
 * Assumptions/Limitations:
@@ -83,6 +86,7 @@ int env_set(char const *var, char const *val)
 {
   unsigned int varlen = strlen(var);
   unsigned int vallen = strlen(val);
+  /* TODO: Make it handle updates of existing variables */
 
   if ((vallen + varlen) > (ENV_SIZE - strlen(env) - 2)) {
     prints("Environment is full\r\n");
@@ -132,6 +136,53 @@ void env_clear(void)
 void env_dump(void)
 {
   prints(env);
+}
+
+/****************************************************************************
+* Name: env_save
+*
+* Description:
+*   Save the environment to EEPROM
+*
+* Input Parameters:
+*   None
+*
+* Returned Value:
+*   None
+*
+* Assumptions/Limitations:
+*
+****************************************************************************/
+void env_save(void)
+{
+  /* TODO: Check if anything has changed before writing */
+  eeprom_write_block(env, (void *)1, ENV_SIZE);
+  prints("Environment saved\r\n");
+}
+
+/****************************************************************************
+* Name: env_restore
+*
+* Description:
+*   Restore the environment from EEPROM
+*
+* Input Parameters:
+*   None
+*
+* Returned Value:
+*   None
+*
+* Assumptions/Limitations:
+*
+****************************************************************************/
+void env_restore(void)
+{
+  if (eeprom_read_byte(0) == EEPROM_INIT) {
+    eeprom_read_block(env, (void *)1, ENV_SIZE);
+    prints("Environment restored\r\n");
+  } else {
+    prints("No environment exists in EEPROM\r\n");
+  }
 }
 
 

@@ -4,5 +4,6 @@
 void ctrl_enable(void);
 void ctrl_disable(void);
 int ctrl_status(void);
+void ctrl_update(void);
 
 #endif

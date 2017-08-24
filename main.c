@@ -1036,6 +1036,9 @@ int main(void)
   /* Enable interrupts globally */
   sei(); 
 
+  /* Restore the environment from EEPROM */
+  env_restore();
+
   prints("\r\nWelcome to PellShell\r\n");
   prints(">> ");
   for (;;) {
@@ -1044,5 +1047,7 @@ int main(void)
       if (parse_cmd(tmp))
         prints(">> ");
     }
+
+    ctrl_update();
   }
 }
