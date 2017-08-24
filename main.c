@@ -6,10 +6,11 @@
 #include <stdlib.h>
 
 #include "rbuf.h"
+#include "ctrl.h"
+#include "env.h"
 
 #define PRINTS_BUFSIZE  128
 #define MAX_ARGC        8 
-#define ENV_SIZE        128
 
 #define MIN(a,b)  ((a) < (b) ? (a) : (b))
 
@@ -18,6 +19,13 @@
 
 #define ASCII_DEL  0x7F
 #define ASCII_BS   0x08
+
+/* NTC values */
+#define RES     10000UL /* Series resistor in Ohm */
+#define REFV    3300UL  /* Reference voltage in mV */
+#define BETA    3435.0f /* Beta coefficient for steinhart equation */
+#define NOMTEMP 25.0f   /* Nominal temperature of temp sensor */
+
 
 struct cmd {
   char const * const cmd;
@@ -53,13 +61,11 @@ int cmd_ramdump(int argc, char *argv[]);
 static int pin_high(int pin);
 static int pin_float(int pin);
 static int pin_low(int pin);
-static int prints(const char *fmt, ...);
 static void echo(char data);
 
 static int g_echo = 1;
 static struct rbuf g_rxbuf_terminal;
 static struct rbuf g_txbuf_terminal;
-static char env[ENV_SIZE] = { 0 };
 static uint32_t g_ticks = 0;
 
 struct pinport pinportmap[] = {
@@ -165,8 +171,8 @@ ISR(TIMER0_COMPA_vect)
   }
 }
 
-/* USART3_UDRE ISR: 
- * Called when USART3 is ready to receive another byte in the transmit
+/* USART0_UDRE ISR: 
+ * Called when USART0 is ready to receive another byte in the transmit
  * register. 
  */
 ISR(USART0_UDRE_vect)
@@ -180,7 +186,7 @@ ISR(USART0_UDRE_vect)
   }
 }
 
-/* USART3_RX ISR: Called when a byte is received on USART3 */
+/* USART0_RX ISR: Called when a byte is received on USART0 */
 ISR(USART0_RX_vect)
 {
   uint8_t tmp;
@@ -188,32 +194,6 @@ ISR(USART0_RX_vect)
   tmp = UDR0;
   rbuf_push(&g_rxbuf_terminal, tmp);
 }
-
-#if 0
-/* USART0_UDRE ISR: 
- * Called when USART0 is ready to receive another byte in the transmit
- * register. 
- */
-ISR(USART0_UDRE_vect)
-{
-  char tmp;
-  if (rbuf_pop(&g_txbuf_test, &tmp)) {
-    UDR0 = tmp;
-  } else {
-    /* Nothing more to send, disable interrupt */
-    UCSR0B &= ~(1 << UDRIE0);
-  }
-}
-
-/* USART3_RX ISR: Called when a byte is received on USART3 */
-ISR(USART0_RX_vect)
-{
-  uint8_t tmp;
-
-  tmp = UDR0;
-  rbuf_push(&g_rxbuf_test, tmp);
-}
-#endif
 
 /****************************************************************************
 * Name: print_string 
@@ -246,36 +226,6 @@ static void print_string(char *string)
 }
 
 /****************************************************************************
-* Name: printt
-*
-* Description:
-*   Sends a formatted string to the test script
-*
-* Input Parameters:
-*   fmt       - Format string (printf style)
-*   ...       - Values used in the format string
-*
-* Returned Value:
-*   Number of bytes sent
-*
-* Assumptions/Limitations:
-*
-****************************************************************************/
-static int printt(const char *fmt, ...)
-{
-  va_list ap;
-  char buf[PRINTS_BUFSIZE];
-  int size;
-
-  va_start(ap, fmt);
-  size = vsnprintf(buf, sizeof(buf), fmt, ap);
-  va_end(ap);
-
-  print_string(buf);
-  return size;
-}
-
-/****************************************************************************
 * Name: prints
 *
 * Description:
@@ -291,7 +241,7 @@ static int printt(const char *fmt, ...)
 * Assumptions/Limitations:
 *
 ****************************************************************************/
-static int prints(const char *fmt, ...)
+int prints(const char *fmt, ...)
 {
   va_list ap;
   char buf[PRINTS_BUFSIZE];
@@ -305,122 +255,30 @@ static int prints(const char *fmt, ...)
   return size;
 }
 
-
-/****************************************************************************
-* Name: env_get 
-*
-* Description:
-*   Get a stored environment variable. The returned value is always zero
-*   terminated.
-*
-* Input Parameters:
-*   var       - Variable to get
-*   value     - Pointer to buffer where the variable value should be stored
-*   size      - Size of the value buffer
-*
-* Returned Value:
-*   0 - Failure
-*  >0 - Length of the returned string 
-*
-* Assumptions/Limitations:
-*
-****************************************************************************/
-static int env_get(char const *var, char *value, size_t size)
-{
-  char *val = NULL;
-  char *valp = NULL;
-  char *startp = NULL;
-  char *endp = NULL;
-  int n;
-
-  val = env;
-  while ((val = strstr(val, var)) != NULL) {
-    valp = val;
-    ++val;
-  }
-
-  if (valp) {
-    startp = strchr(valp, '=');
-    ++startp;
-    endp = strchr(valp, ';');
-    if (!endp || !startp) {
-      prints("Error in environment!\r\n");
-      return 0;
-    } else {
-      n = MIN(endp - startp, (int)size - 1);
-      strncpy(value,
-          startp,
-          n);
-
-      value[n] = '\0';
-      return strlen(value);
-    }
-  } else {
-    return -1;
-  }
-}
-
-/****************************************************************************
-* Name: env_set 
-*
-* Description:
-*   Set an environment variable.
-*
-* Input Parameters:
-*   var       - Variable to set
-*   value     - Variable value to set
-*
-* Returned Value:
-*   0 - Failure
-*  >0 - Length of the set string 
-*
-* Assumptions/Limitations:
-*
-****************************************************************************/
-static int env_set(char const *var, char const *val)
-{
-  unsigned int varlen = strlen(var);
-  unsigned int vallen = strlen(val);
-
-  if ((vallen + varlen) > (ENV_SIZE - strlen(env) - 2)) {
-    prints("Environment is full\r\n");
-    return 0;
-  } else if (varlen > 0) {
-    return snprintf(env+strlen(env), ENV_SIZE - strlen(env), "%s=%s;", var, val);
-  } else {
-    prints("No variable given\r\n");
-    return 0;
-  }
-}
-
-/****************************************************************************
-* Name: env_clear
-*
-* Description:
-*   Clear the environment. Remove all set variables from env.
-*
-* Input Parameters:
-*   None
-*
-* Returned Value:
-*   None
-*
-* Assumptions/Limitations:
-*
-****************************************************************************/
-static void env_clear(void)
-{
-  memset(env, 0, sizeof(env));
-}
-
 int cmd_ctrl(int argc, char *argv[])
 {
-}
+  if (argc < 2) {
+    prints("Not enough arguments. Usage: %s [ enable | disable | status ]\r\n",
+           argv[0]);
+    return -1;
+  }
 
-#define RES     10000UL /* Series resistor in Ohm */
-#define REFV    3300UL  /* Reference voltage in mV */
-#define BETA    3435.0f
-#define NOMTEMP 25.0f
+  if (strcmp(argv[1], "enable") == 0) {
+    prints("Enabling control loop\r\n");
+    ctrl_enable();
+  } else if (strcmp(argv[1], "disable") == 0) {
+    prints("Disabling control loop\r\n");
+    ctrl_disable();
+  } else if (strcmp(argv[1], "status") == 0) {
+    prints("Control loop is: %s\r\n",
+           ctrl_status() == 0 ? "Disabled" : "Enabled");
+  } else {
+    prints("Invalid argument: %s\r\n", argv[1]);
+    return -1;
+  }
+
+  return 0;
+}
 
 int cmd_adc(int argc, char *argv[])
 {
@@ -584,7 +442,7 @@ int cmd_env(int argc, char *argv[])
 {
   if (argc >= 2) {
     if (strcmp(argv[1], "dump") == 0) {
-      prints(env);
+      env_dump();
       prints("\r\n");
     } else if (strcmp(argv[1], "clear") == 0) {
       env_clear();
