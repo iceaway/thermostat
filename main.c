@@ -47,6 +47,7 @@ int cmd_env(int argc, char *argv[]);
 int cmd_pin(int argc, char *argv[]);
 int cmd_time(int argc, char *argv[]);
 int cmd_adc(int argc, char *argv[]);
+int cmd_ctrl(int argc, char *argv[]);
 int cmd_ramdump(int argc, char *argv[]);
 
 static int pin_high(int pin);
@@ -93,6 +94,7 @@ const struct cmd commands[] = {
   { "time", "Display uptime in [ms]", cmd_time },
   { "ramdump", "Dump ram", cmd_ramdump },
   { "adc",   "Display raw ADC value", cmd_adc },
+  { "ctrl",   "Enable/disable control loop", cmd_ctrl },
   { NULL, NULL, NULL }
 };
 
@@ -409,6 +411,10 @@ static int env_set(char const *var, char const *val)
 static void env_clear(void)
 {
   memset(env, 0, sizeof(env));
+}
+
+int cmd_ctrl(int argc, char *argv[])
+{
 }
 
 #define RES     10000UL /* Series resistor in Ohm */
