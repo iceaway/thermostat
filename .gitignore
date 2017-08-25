@@ -1,0 +1,6 @@
+# Ignore binary/generated files and vim swap files
+*.swp
+*.o
+*.elf
+*.map
+*.hex
