@@ -10,6 +10,7 @@
 #include "env.h"
 #include "adc.h"
 #include "temperature.h"
+#include "sched.h"
 
 #define PRINTS_BUFSIZE  128
 #define MAX_ARGC        8 
@@ -156,6 +157,11 @@ static void print_char(char data)
   transmit();
 }
 
+uint32_t get_ticks(void)
+{
+  return g_ticks;
+}
+
 /* TIMER0 ISR: Tick counter. Executed every 1 ms */
 ISR(TIMER0_COMPA_vect)
 {
@@ -164,6 +170,7 @@ ISR(TIMER0_COMPA_vect)
     PORTC ^= (1 << PC7);
     PORTB ^= _BV(PORTB7);
   }
+  sched_update();
 }
 
 /* USART0_UDRE ISR: 
@@ -1002,6 +1009,8 @@ int main(void)
   /* Restore the environment from EEPROM */
   //env_restore(); /* TODO: This halts execution? */
 
+  sched_add_task(ctrl_update, 1, 500, "ctrl");
+
   prints("\r\nWelcome to PellShell\r\n");
   prints(">> ");
   for (;;) {
@@ -1011,6 +1020,6 @@ int main(void)
         prints(">> ");
     }
 
-    ctrl_update();
+    sched_runtasks();
   }
 }

@@ -1,5 +1,7 @@
 #include "ctrl.h"
 #include "env.h"
+#include "adc.h"
+#include "temperature.h"
 #include "main.h"
 
 enum heater_state {
@@ -30,7 +32,9 @@ void ctrl_update(void)
   char tmp[16];
   float t_hi;
   float t_lo;
-  float temp;
+  float temp; 
+  uint16_t adc = adc_get();
+  temp = adc2temp(adc);
 
   if (env_get("T_HI", tmp, sizeof(tmp)) <= 0)
     return;
