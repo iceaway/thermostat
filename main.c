@@ -1007,7 +1007,7 @@ int main(void)
   sei(); 
 
   /* Restore the environment from EEPROM */
-  //env_restore(); /* TODO: This halts execution? */
+  env_restore(); /* TODO: This halts execution? */
 
   sched_add_task(ctrl_update, 1, 500, "ctrl");
 

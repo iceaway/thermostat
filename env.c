@@ -157,6 +157,7 @@ void env_dump(void)
 void env_save(void)
 {
   /* TODO: Check if anything has changed before writing */
+  eeprom_busy_wait(); /* Wait until eeprom is ready */
   eeprom_write_block(env, (void *)1, ENV_SIZE);
   prints("Environment saved\r\n");
 }
@@ -178,7 +179,9 @@ void env_save(void)
 ****************************************************************************/
 void env_restore(void)
 {
+  eeprom_busy_wait(); /* Wait until eeprom is ready */
   if (eeprom_read_byte(0) == EEPROM_INIT) {
+    eeprom_busy_wait(); /* Wait until eeprom is ready */
     eeprom_read_block(env, (void *)1, ENV_SIZE);
     prints("Environment restored\r\n");
   } else {
