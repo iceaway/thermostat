@@ -119,6 +119,7 @@ int env_set(char const *var, char const *val)
 void env_clear(void)
 {
   memset(env, 0, sizeof(env));
+  env_save();
 }
 
 /****************************************************************************
