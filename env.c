@@ -86,14 +86,16 @@ int env_set(char const *var, char const *val)
 {
   unsigned int varlen = strlen(var);
   unsigned int vallen = strlen(val);
+  int tmp;
   /* TODO: Make it handle updates of existing variables */
 
   if ((vallen + varlen) > (ENV_SIZE - strlen(env) - 2)) {
     prints("Environment is full\r\n");
     return 0;
   } else if (varlen > 0) {
+    tmp = snprintf(env+strlen(env), ENV_SIZE - strlen(env), "%s=%s;", var, val);
     env_save();
-    return snprintf(env+strlen(env), ENV_SIZE - strlen(env), "%s=%s;", var, val);
+    return tmp;
   } else {
     prints("No variable given\r\n");
     return 0;
@@ -159,6 +161,7 @@ void env_save(void)
   /* TODO: Check if anything has changed before writing */
   eeprom_busy_wait(); /* Wait until eeprom is ready */
   eeprom_write_block(env, (void *)1, ENV_SIZE);
+  eeprom_write_byte(0, EEPROM_INIT);
   prints("Environment saved\r\n");
 }
 

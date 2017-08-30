@@ -36,30 +36,49 @@ void ctrl_update(void)
   uint16_t adc = adc_get();
   temp = adc2temp(adc);
 
-  if (env_get("T_HI", tmp, sizeof(tmp)) <= 0)
+  if (!g_enabled) {
+    g_state = HEATER_OFF;
+    pin_low(37);
     return;
+  }
+
+  if (env_get("T_HI", tmp, sizeof(tmp)) <= 0) {
+    g_state = HEATER_OFF;
+    pin_low(37);
+    return;
+  }
   
   t_hi = atof(tmp);
-  if ((t_hi < 0.0f) || (t_hi > 100.0f))
+  if ((t_hi < 0.0f) || (t_hi > 100.0f)) {
+    g_state = HEATER_OFF;
+    pin_low(37);
     return;
+  }
 
-  if (env_get("T_LO", tmp, sizeof(tmp)) <= 0)
+  if (env_get("T_LO", tmp, sizeof(tmp)) <= 0) {
+    g_state = HEATER_OFF;
+    pin_low(37);
     return;
+  }
   
   t_lo = atof(tmp);
-  if ((t_lo < 0.0f) || (t_lo > 100.0f) || (t_lo > t_hi))
+  if ((t_lo < 0.0f) || (t_lo > 100.0f) || (t_lo > t_hi)) {
+    g_state = HEATER_OFF;
+    pin_low(37);
     return;
-
+  }
 
   /* temp = temp_get(); */
   if ((temp <= t_lo) && (g_state == HEATER_OFF)) {
     /* turn on heater */
     prints("Turning ON heater\r\n");
     g_state = HEATER_ON;
+    pin_high(37);
   } else if ((temp >= t_hi) && (g_state == HEATER_ON)) {
     /* turn off heater */
     prints("Turning OFF heater\r\n");
     g_state = HEATER_OFF;
+    pin_low(37);
   } else {
     /* between temperature limits, do nothing */
   }

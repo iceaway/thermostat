@@ -19,7 +19,7 @@ static struct task g_tasks[MAX_TASKS] = { 0 };
 int sched_add_task(void (*sched_fn)(void), uint8_t enabled, uint32_t interval, char *name)
 {
   int i = 0;
-  
+
   if (!sched_fn || (interval == 0))
     return -1;
 
@@ -86,6 +86,8 @@ void sched_runtasks(void)
   for (i = 0; i < MAX_TASKS; ++i) {
     if (g_tasks[i].sched_fn && g_tasks[i].enabled && g_tasks[i].run) {
       g_tasks[i].sched_fn();
+      g_tasks[i].lastrun = get_ticks();
+      g_tasks[i].run = 0;
     }
   }
 }

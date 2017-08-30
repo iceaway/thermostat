@@ -53,10 +53,11 @@ int cmd_time(int argc, char *argv[]);
 int cmd_adc(int argc, char *argv[]);
 int cmd_ctrl(int argc, char *argv[]);
 int cmd_ramdump(int argc, char *argv[]);
+int cmd_heat(int argc, char *argv[]);
 
-static int pin_high(int pin);
+int pin_high(int pin);
 static int pin_float(int pin);
-static int pin_low(int pin);
+int pin_low(int pin);
 static void echo(char data);
 
 static int g_echo = 1;
@@ -97,6 +98,7 @@ const struct cmd commands[] = {
   { "ramdump", "Dump ram", cmd_ramdump },
   { "adc",   "Display raw ADC value", cmd_adc },
   { "ctrl",   "Enable/disable control loop", cmd_ctrl },
+  { "heat", "Turn on/off heater", cmd_heat },
   { NULL, NULL, NULL }
 };
 
@@ -255,6 +257,28 @@ int prints(const char *fmt, ...)
 
   print_string(buf);
   return size;
+}
+
+int cmd_heat(int argc, char *argv[])
+{
+  if (argc < 2) {
+    prints("Not enough arguments. Usage: %s [ on | off ]\r\n",
+           argv[0]);
+    return -1;
+  }
+
+  if (strcmp(argv[1], "on") == 0) {
+    prints("Enabling heater\r\n");
+    pin_high(37);
+  } else if (strcmp(argv[1], "off") == 0) {
+    prints("Disabling heater\r\n");
+    pin_low(37);
+  } else {
+    prints("Invalid argument: %s\r\n", argv[1]);
+    return -1;
+  }
+
+  return 0;
 }
 
 int cmd_ctrl(int argc, char *argv[])
@@ -663,7 +687,7 @@ static int pin_highlowfloat(int pin, int mode)
 
   if (pinportmap[i].port) {
     /* Found */
-    prints("Setting pin %d to mode %d\r\n", pin, mode);
+    prints("Setting pin %d to mode %d\r\n", pin, mode); 
     switch (mode) {
     case PIN_LOW:
       *pinportmap[i].ddr  |=  (1 << pinportmap[i].bit);
@@ -714,7 +738,7 @@ static int pin_highlowfloat(int pin, int mode)
 *   previously an output.
 *
 ****************************************************************************/
-static int pin_low(int pin)
+int pin_low(int pin)
 {
   return pin_highlowfloat(pin, PIN_LOW);
 }
@@ -735,7 +759,7 @@ static int pin_low(int pin)
 * Assumptions/Limitations:
 *
 ****************************************************************************/
-static int pin_high(int pin)
+int pin_high(int pin)
 {
   return pin_highlowfloat(pin, PIN_HIGH);
 }
@@ -951,6 +975,10 @@ static void init_gpio(void)
 
   /* Set ADC input as tri-stated (input, no pull-up) */
   pin_input(0, 0);
+
+  /*  */
+  pin_output(37);
+  pin_low(37);
 
   /* For blinking the diode */
   DDRB |= _BV(DDB7);
