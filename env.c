@@ -159,7 +159,12 @@ void env_dump(void)
 ****************************************************************************/
 void env_save(void)
 {
-  /* TODO: Check if anything has changed before writing */
+  /* TODO: Check if anything has changed before writing.
+   * EEPROM v2:
+   * Byte 0 - INIT
+   * Byte 1-2 - Env size
+   * Byte 3-n - Env
+   */
   eeprom_busy_wait(); /* Wait until eeprom is ready */
   eeprom_write_block(env, (void *)1, ENV_SIZE);
   eeprom_write_byte(0, EEPROM_INIT);

@@ -31,8 +31,8 @@ int ctrl_status(void)
 void ctrl_update(void)
 {
   char tmp[16];
-  float t_hi;
-  float t_lo;
+  float t_set;
+  float t_hyst;
   float temp = temperature_get();
 
   if (!g_enabled) {
@@ -41,39 +41,39 @@ void ctrl_update(void)
     return;
   }
 
-  if (env_get("T_HI", tmp, sizeof(tmp)) <= 0) {
+  if (env_get("T_SET", tmp, sizeof(tmp)) <= 0) {
     g_state = HEATER_OFF;
     heater_off();
     return;
   }
   
-  t_hi = atof(tmp);
-  if ((t_hi < 0.0f) || (t_hi > 100.0f)) {
+  t_set = atof(tmp);
+  if ((t_set < 0.0f) || (t_set > 100.0f)) {
     g_state = HEATER_OFF;
     heater_off();
     return;
   }
 
-  if (env_get("T_LO", tmp, sizeof(tmp)) <= 0) {
+  if (env_get("T_HYST", tmp, sizeof(tmp)) <= 0) {
     g_state = HEATER_OFF;
     heater_off();
     return;
   }
   
-  t_lo = atof(tmp);
-  if ((t_lo < 0.0f) || (t_lo > 100.0f) || (t_lo > t_hi)) {
+  t_hyst = atof(tmp);
+  if (((t_set - t_hyst) < 0.0f) || ((t_set + t_hyst) > 100.0f)) {
     g_state = HEATER_OFF;
     heater_off();
     return;
   }
 
   /* temp = temp_get(); */
-  if ((temp <= t_lo) && (g_state == HEATER_OFF)) {
+  if ((temp <= (t_set - t_hyst)) && (g_state == HEATER_OFF)) {
     /* turn on heater */
     prints("Turning ON heater\r\n");
     g_state = HEATER_ON;
     heater_on();
-  } else if ((temp >= t_hi) && (g_state == HEATER_ON)) {
+  } else if ((temp >= (t_set + t_hyst)) && (g_state == HEATER_ON)) {
     /* turn off heater */
     prints("Turning OFF heater\r\n");
     g_state = HEATER_OFF;
