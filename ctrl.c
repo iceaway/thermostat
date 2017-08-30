@@ -2,6 +2,7 @@
 #include "env.h"
 #include "adc.h"
 #include "temperature.h"
+#include "heater.h"
 #include "main.h"
 
 enum heater_state {
@@ -32,39 +33,37 @@ void ctrl_update(void)
   char tmp[16];
   float t_hi;
   float t_lo;
-  float temp; 
-  uint16_t adc = adc_get();
-  temp = adc2temp(adc);
+  float temp = temperature_get();
 
   if (!g_enabled) {
     g_state = HEATER_OFF;
-    pin_low(37);
+    heater_off();
     return;
   }
 
   if (env_get("T_HI", tmp, sizeof(tmp)) <= 0) {
     g_state = HEATER_OFF;
-    pin_low(37);
+    heater_off();
     return;
   }
   
   t_hi = atof(tmp);
   if ((t_hi < 0.0f) || (t_hi > 100.0f)) {
     g_state = HEATER_OFF;
-    pin_low(37);
+    heater_off();
     return;
   }
 
   if (env_get("T_LO", tmp, sizeof(tmp)) <= 0) {
     g_state = HEATER_OFF;
-    pin_low(37);
+    heater_off();
     return;
   }
   
   t_lo = atof(tmp);
   if ((t_lo < 0.0f) || (t_lo > 100.0f) || (t_lo > t_hi)) {
     g_state = HEATER_OFF;
-    pin_low(37);
+    heater_off();
     return;
   }
 
@@ -73,12 +72,12 @@ void ctrl_update(void)
     /* turn on heater */
     prints("Turning ON heater\r\n");
     g_state = HEATER_ON;
-    pin_high(37);
+    heater_on();
   } else if ((temp >= t_hi) && (g_state == HEATER_ON)) {
     /* turn off heater */
     prints("Turning OFF heater\r\n");
     g_state = HEATER_OFF;
-    pin_low(37);
+    heater_off();
   } else {
     /* between temperature limits, do nothing */
   }

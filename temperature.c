@@ -1,5 +1,6 @@
 #include <math.h>
 #include "temperature.h"
+#include "adc.h"
 
 /* NTC values */
 #define RES     10000UL /* Series resistor in Ohm */
@@ -8,7 +9,7 @@
 //#define BETA    3023.3f /* Beta coefficient for steinhart equation */
 #define NOMTEMP 25.0f   /* Nominal temperature of temp sensor */
 
-float adc2temp(uint16_t val)
+static float adc2temp(uint16_t val)
 {
   float tmp2;
   float temp;
@@ -26,5 +27,12 @@ float adc2temp(uint16_t val)
   temp -= 273.15f;
 
   return temp;
+}
+
+float temperature_get(void)
+{
+  uint16_t adc = adc_get();
+
+  return adc2temp(adc);
 }
 

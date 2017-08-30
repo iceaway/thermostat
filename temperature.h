@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-float adc2temp(uint16_t val);
+float temperature_get(void);
 
 #endif
