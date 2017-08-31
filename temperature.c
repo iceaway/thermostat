@@ -1,10 +1,10 @@
 #include <math.h>
 #include "temperature.h"
 #include "adc.h"
+#include "env.h"
 
 /* NTC values */
 #define RES     10000UL /* Series resistor in Ohm */
-#define REFV    3300UL  /* Reference voltage in mV */
 #define BETA    3435.0f /* Beta coefficient for steinhart equation */
 //#define BETA    3023.3f /* Beta coefficient for steinhart equation */
 #define NOMTEMP 25.0f   /* Nominal temperature of temp sensor */
@@ -13,6 +13,16 @@ static float adc2temp(uint16_t val)
 {
   float tmp2;
   float temp;
+  float beta = BETA;
+  char tmp[16];
+
+
+  if (env_get("BETA", tmp, sizeof(tmp)) > 0) {
+    beta = atof(tmp);
+    if ((beta < 3000.0f) && (beta > 4000.0f))
+      beta = BETA;
+  }
+
   /* This code is pretty much taken directly from adafruits article on
    * using a thermistor.
    */
