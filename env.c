@@ -38,6 +38,9 @@ int env_get(char const *var, char *value, size_t size)
   char *endp = NULL;
   int n;
 
+  if (!value)
+    return -1;
+
   val = env;
   while ((val = strstr(val, var)) != NULL) {
     valp = val;
@@ -87,10 +90,12 @@ int env_set(char const *var, char const *val)
   unsigned int varlen = strlen(var);
   unsigned int vallen = strlen(val);
   int tmp;
-  /* TODO: Make it handle updates of existing variables */
 
   if ((vallen + varlen) > (ENV_SIZE - strlen(env) - 2)) {
     prints("Environment is full\r\n");
+    /* Do garbage collection here and remove all old versions of 
+     * variables.
+     */
     return 0;
   } else if (varlen > 0) {
     tmp = snprintf(env+strlen(env), ENV_SIZE - strlen(env), "%s=%s;", var, val);
