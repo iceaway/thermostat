@@ -165,10 +165,16 @@ void env_save(void)
    * Byte 1-2 - Env size
    * Byte 3-n - Env
    */
+  uint16_t envlen = strlen(env);
   eeprom_busy_wait(); /* Wait until eeprom is ready */
-  eeprom_write_block(env, (void *)1, ENV_SIZE);
-  eeprom_write_byte(0, EEPROM_INIT);
-  prints("Environment saved\r\n");
+  eeprom_write_byte((void *)1, (envlen & 0xff00) >> 8);
+  eeprom_busy_wait(); /* Wait until eeprom is ready */
+  eeprom_write_byte((void *)2, envlen & 0x00ff);
+  eeprom_busy_wait(); /* Wait until eeprom is ready */
+  eeprom_write_block(env, (void *)3, envlen);
+  eeprom_busy_wait(); /* Wait until eeprom is ready */
+  eeprom_write_byte((void *)0, EEPROM_INIT);
+  prints("Environment saved, wrote %ud bytes\r\n", envlen);
 }
 
 /****************************************************************************
@@ -188,11 +194,16 @@ void env_save(void)
 ****************************************************************************/
 void env_restore(void)
 {
+  uint16_t envlen;
   eeprom_busy_wait(); /* Wait until eeprom is ready */
-  if (eeprom_read_byte(0) == EEPROM_INIT) {
+  if (eeprom_read_byte((void *)0) == EEPROM_INIT) {
     eeprom_busy_wait(); /* Wait until eeprom is ready */
-    eeprom_read_block(env, (void *)1, ENV_SIZE);
-    prints("Environment restored\r\n");
+    envlen = eeprom_read_byte((void *)1) << 8;
+    eeprom_busy_wait(); /* Wait until eeprom is ready */
+    envlen |= eeprom_read_byte((void *)2);
+    eeprom_read_block(env, (void *)3, envlen);
+    env[envlen] = '\0';
+    prints("Environment restored, read %ld bytes\r\n", envlen);
   } else {
     prints("No environment exists in EEPROM\r\n");
   }
