@@ -37,6 +37,7 @@ int cmd_set(int argc, char *argv[]);
 int cmd_echo(int argc, char *argv[]);
 int cmd_env(int argc, char *argv[]);
 //int cmd_pin(int argc, char *argv[]);
+int cmd_reboot(int argc, char *argv[]);
 int cmd_time(int argc, char *argv[]);
 int cmd_adc(int argc, char *argv[]);
 int cmd_temp(int argc, char *argv[]);
@@ -45,6 +46,7 @@ int cmd_ramdump(int argc, char *argv[]);
 int cmd_heat(int argc, char *argv[]);
 
 static void echo(char data);
+static int reboot(void);
 
 static int g_echo = 1;
 static struct rbuf g_rxbuf_terminal;
@@ -64,6 +66,7 @@ const struct cmd commands[] = {
   { "ctrl",   "Enable/disable control loop", cmd_ctrl },
   { "heat", "Turn on/off heater", cmd_heat },
   { "temp", "Show current temperature", cmd_temp },
+  { "reboot", "Reboot!", cmd_reboot },
   { NULL, NULL, NULL }
 };
 
@@ -450,6 +453,12 @@ int cmd_env(int argc, char *argv[])
   return 0;
 }
 
+int cmd_reboot(int argc, char *argv[])
+{
+  reboot();
+  return 0;
+}
+
 int cmd_echo(int argc, char *argv[])
 {
   char *var = NULL;
@@ -740,6 +749,7 @@ int main(void)
   sei(); 
 
   /* Restore the environment from EEPROM */
+  prints("Restoring environment...\r\n");
   env_restore(); /* TODO: This halts execution? */
 
   sched_add_task(ctrl_update, 1, 500, "ctrl");

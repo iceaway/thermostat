@@ -1,11 +1,13 @@
 #include <string.h>
 #include <stdio.h>
 #include <avr/eeprom.h>
+#include <avr/delay.h>
 #include "env.h"
 #include "main.h"
 
 #define ENV_SIZE        128
-#define EEPROM_INIT     0xAA
+#define EEPROM_INIT     0xAB
+#define EEPROM_SIZE     4096
 
 #define MIN(a,b)  ((a) < (b) ? (a) : (b))
 
@@ -89,6 +91,7 @@ int env_set(char const *var, char const *val)
 {
   unsigned int varlen = strlen(var);
   unsigned int vallen = strlen(val);
+  char *p;
   int tmp;
 
   if ((vallen + varlen) > (ENV_SIZE - strlen(env) - 2)) {
@@ -98,6 +101,16 @@ int env_set(char const *var, char const *val)
      */
     return 0;
   } else if (varlen > 0) {
+    /* Convert ; (reserved as delimiter) to . */
+    if (strchr(var, ';')) {
+      prints("Not allowed to have ';' in the variable name.\r\n");
+      return -1;
+    }
+
+    p = val;
+    while ((p = strchr(p, ';')))
+      *p = '.';
+
     tmp = snprintf(env+strlen(env), ENV_SIZE - strlen(env), "%s=%s;", var, val);
     env_save();
     return tmp;
@@ -179,7 +192,7 @@ void env_save(void)
   eeprom_write_block(env, (void *)3, envlen);
   eeprom_busy_wait(); /* Wait until eeprom is ready */
   eeprom_write_byte((void *)0, EEPROM_INIT);
-  prints("Environment saved, wrote %ud bytes\r\n", envlen);
+  prints("Environment saved, wrote %hu bytes\r\n", envlen);
 }
 
 /****************************************************************************
@@ -206,9 +219,14 @@ void env_restore(void)
     envlen = eeprom_read_byte((void *)1) << 8;
     eeprom_busy_wait(); /* Wait until eeprom is ready */
     envlen |= eeprom_read_byte((void *)2);
-    eeprom_read_block(env, (void *)3, envlen);
-    env[envlen] = '\0';
-    prints("Environment restored, read %ld bytes\r\n", envlen);
+    if (envlen <= EEPROM_SIZE) {
+      prints("Reading %hu bytes from EEPROM\r\n", envlen);
+      eeprom_read_block(env, (void *)3, envlen);
+      env[envlen] = '\0';
+      prints("Environment restored, read %hu bytes\r\n", envlen);
+    }  else {
+      prints("Invalid size of environment: %lu\r\n", envlen);
+    }
   } else {
     prints("No environment exists in EEPROM\r\n");
   }

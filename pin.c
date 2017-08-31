@@ -224,7 +224,7 @@ static int pin_highlowfloat(int pin, int mode)
 
   if (pinportmap[i].port) {
     /* Found */
-    prints("Setting pin %d to mode %d\r\n", pin, mode); 
+    /* prints("Setting pin %d to mode %d\r\n", pin, mode);  */
     switch (mode) {
     case PIN_LOW:
       *pinportmap[i].ddr  |=  (1 << pinportmap[i].bit);

@@ -36,34 +36,24 @@ void ctrl_update(void)
   float temp = temperature_get();
 
   if (!g_enabled) {
-    g_state = HEATER_OFF;
-    heater_off();
     return;
   }
 
   if (env_get("T_SET", tmp, sizeof(tmp)) <= 0) {
-    g_state = HEATER_OFF;
-    heater_off();
     return;
   }
   
   t_set = atof(tmp);
   if ((t_set < 0.0f) || (t_set > 100.0f)) {
-    g_state = HEATER_OFF;
-    heater_off();
     return;
   }
 
   if (env_get("T_HYST", tmp, sizeof(tmp)) <= 0) {
-    g_state = HEATER_OFF;
-    heater_off();
     return;
   }
   
   t_hyst = atof(tmp);
   if (((t_set - t_hyst) < 0.0f) || ((t_set + t_hyst) > 100.0f)) {
-    g_state = HEATER_OFF;
-    heater_off();
     return;
   }
 

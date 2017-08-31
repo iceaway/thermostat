@@ -6,5 +6,6 @@ int pin_float(int pin);
 int pin_low(int pin);
 int pin_input(int pin, int pullup);
 int pin_output(int pin);
+int pin_read(int pin);
 
 #endif

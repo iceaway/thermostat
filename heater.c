@@ -3,10 +3,12 @@
 
 void heater_on(void)
 {
-  pin_high(37);
+  if (pin_read(37) == 0)
+    pin_high(37);
 }
 
 void heater_off(void)
 {
-  pin_low(37);
+  if (pin_read(37) == 1)
+    pin_low(37);
 }
