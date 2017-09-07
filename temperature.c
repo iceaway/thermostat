@@ -6,8 +6,10 @@
 /* NTC values */
 #define RES     10000UL /* Series resistor in Ohm */
 #define BETA    3435.0f /* Beta coefficient for steinhart equation */
-//#define BETA    3023.3f /* Beta coefficient for steinhart equation */
 #define NOMTEMP 25.0f   /* Nominal temperature of temp sensor */
+
+#define BETA_MIN  3000.0f /* Sanity check, min allowed value for BETA */
+#define BETA_MAX  4000.0f /* Sanity check, max allowed value for BETA */
 
 static float adc2temp(uint16_t val)
 {
@@ -19,7 +21,7 @@ static float adc2temp(uint16_t val)
 
   if (env_get("BETA", tmp, sizeof(tmp)) > 0) {
     beta = atof(tmp);
-    if ((beta < 3000.0f) && (beta > 4000.0f))
+    if ((beta < BETA_MAX) && (beta > BETA_MIN))
       beta = BETA;
   }
 
