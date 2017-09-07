@@ -1,7 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <avr/eeprom.h>
-#include <avr/delay.h>
+#include <util/delay.h>
 #include "env.h"
 #include "main.h"
 
@@ -11,41 +11,143 @@
 
 #define MIN(a,b)  ((a) < (b) ? (a) : (b))
 
-static char env[ENV_SIZE] = { 0 };
+static char g_env[ENV_SIZE] = { 0 };
+static char g_env_gc[ENV_SIZE] = { 0 };
+
+static int env_get_internal(char *env, char const *var, char *value, size_t size);
 
 /****************************************************************************
-* Name: env_get 
+* Name: garbage_collect
+*
+* Description:
+*   Remove all old entries of variables in the environment.
+*
+* Input Parameters:
+*   None
+*
+* Returned Value:
+*   None
+*
+* Assumptions/Limitations:
+*   None
+*
+****************************************************************************/
+static void garbage_collect(void)
+{
+  char *p;
+  char *endp;
+  char varname[MAX_NAME_LEN+1];
+  char value[MAX_VALUE_LEN+1];
+  int end;
+  int len;
+  int gcidx = 0;
+  unsigned int pre_size;
+  unsigned int post_size;
+  /* General outline of the process:
+   * 1. Find the first variable in the environment. Save the varname and value
+   *    to a temporary environment copy. 
+   * 2. Proceed to the next variable. Check if it exists 
+   *    in the temporary environment. If not, copy it. Otherwise ignore it.
+   * 3. When the end of the original environment is reached, we are
+   *    finished.
+   */
+
+  end = strlen(g_env);
+  pre_size = end;
+  if (end > ENV_SIZE) {
+    prints("Env is somehow too big.\r\n");
+    return;
+  }
+
+  if (end == 0) {
+    prints("Env is empty, no need to gc\r\n");
+    return;
+  }
+
+  memset(g_env_gc, 0, sizeof(g_env_gc));
+
+  p = g_env; 
+  prints("Current env: '%s'\r\n", g_env);
+  while (p) {
+    endp = strchr(p, '=');
+    /* endp now points to the END of the first var=value pair */
+    if (endp) {
+      len = endp - p;
+      if (len && (len < MAX_NAME_LEN)) {
+        memset(varname, 0, sizeof(varname));
+        memcpy(varname, p, len);
+        if (env_get_internal(g_env_gc, varname, NULL, 0) < 0) {
+          env_get(varname, value, MAX_VALUE_LEN);
+          gcidx += snprintf(g_env_gc + gcidx,
+                            sizeof(g_env_gc) - gcidx,
+                            "%s=%s;",
+                            varname,
+                            value);
+
+        } else {
+          /* var is already in temporary environment, ignore it */
+        }
+      } else {
+        /* either var name is zero or name is too long, neither should 
+         * be possible. Clear env?
+         */
+      }
+    } else {
+      /* End of environment reached! */
+      prints("Found the end of the environment, replacing old environment\r\n");
+      memcpy(g_env, g_env_gc, gcidx);
+      g_env[gcidx] = '\0';
+      env_save();
+      post_size = gcidx;
+      prints("Garbage collect saved %d bytes\r\n", pre_size - post_size);
+      break;
+    }
+    p = strchr(p+1, ';');
+    if (p)
+      ++p;
+  }
+}
+
+int env_get(char const *var, char *value, size_t size)
+{
+  return env_get_internal(g_env, var, value, size);
+}
+
+/****************************************************************************
+* Name: env_get_internal
 *
 * Description:
 *   Get a stored environment variable. The returned value is always zero
 *   terminated.
 *
 * Input Parameters:
+*   env       - pointer to environment to get variable from
 *   var       - Variable to get
 *   value     - Pointer to buffer where the variable value should be stored
 *   size      - Size of the value buffer
 *
 * Returned Value:
-* <=0 - Failure
-*  >0 - Length of the returned string 
+*  <0 - Failure
+*  >=0 - Length of the returned string 
 *
 * Assumptions/Limitations:
 *
 ****************************************************************************/
-int env_get(char const *var, char *value, size_t size)
+static int env_get_internal(char *env, char const *var, char *value, size_t size)
 {
   char *val = NULL;
   char *valp = NULL;
   char *startp = NULL;
   char *endp = NULL;
-  int n;
+  int n = 0;
 
-  if (!value)
-    return -1;
-
+  /* TODO: We need to check here that the substring returned is actually
+   * a variable and not the contents of a different variable.
+   */
   val = env;
   while ((val = strstr(val, var)) != NULL) {
-    valp = val;
+    if ((val == env) || (*(val-1) == ';'))
+      valp = val;
     ++val;
   }
 
@@ -57,13 +159,12 @@ int env_get(char const *var, char *value, size_t size)
       prints("Error in environment!\r\n");
       return 0;
     } else {
-      n = MIN(endp - startp, (int)size - 1);
-      strncpy(value,
-          startp,
-          n);
-
-      value[n] = '\0';
-      return strlen(value);
+      if (value && size) {
+        n = MIN(endp - startp, (int)size - 1);
+        strncpy(value, startp, n);
+        value[n] = '\0';
+      }
+      return n;
     }
   } else {
     return -1;
@@ -87,31 +188,38 @@ int env_get(char const *var, char *value, size_t size)
 * Assumptions/Limitations:
 *
 ****************************************************************************/
-int env_set(char const *var, char const *val)
+int env_set(char const *var, char *val)
 {
-  unsigned int varlen = strlen(var);
-  unsigned int vallen = strlen(val);
+  int varlen = (int)strlen(var);
+  int vallen = (int)strlen(val);
   char *p;
   int tmp;
-
-  if ((vallen + varlen) > (ENV_SIZE - strlen(env) - 2)) {
-    prints("Environment is full\r\n");
+  
+  if ((vallen + varlen) > (ENV_SIZE - (int)strlen(g_env) - 2)) {
+    prints("Environment is full, garbage collecting.\r\n");
     /* Do garbage collection here and remove all old versions of 
-     * variables.
+     * variables. Try to save new value again.
      */
-    return 0;
+    garbage_collect();
+    return env_set(var, val);
   } else if (varlen > 0) {
     /* Convert ; (reserved as delimiter) to . */
-    if (strchr(var, ';')) {
-      prints("Not allowed to have ';' in the variable name.\r\n");
+    if (strchr(var, ';') || strchr(var, '=')) {
+      prints("Not allowed to have ';' or '=' in the variable name.\r\n");
       return -1;
     }
 
     p = val;
+    /* replace illegal characters in values */
     while ((p = strchr(p, ';')))
       *p = '.';
 
-    tmp = snprintf(env+strlen(env), ENV_SIZE - strlen(env), "%s=%s;", var, val);
+    p = val;
+    while ((p = strchr(p, '=')))
+      *p = '.';
+
+    tmp = snprintf(g_env+strlen(g_env), ENV_SIZE - strlen(g_env), "%s=%s;", var, val);
+    prints("wrote %d bytes to env\r\n", tmp);
     env_save();
     return tmp;
   } else {
@@ -136,7 +244,7 @@ int env_set(char const *var, char const *val)
 ****************************************************************************/
 void env_clear(void)
 {
-  memset(env, 0, sizeof(env));
+  memset(g_env, 0, sizeof(g_env));
   env_save();
 }
 
@@ -157,7 +265,7 @@ void env_clear(void)
 ****************************************************************************/
 void env_dump(void)
 {
-  prints(env);
+  prints(g_env);
 }
 
 /****************************************************************************
@@ -183,13 +291,13 @@ void env_save(void)
    * Byte 1-2 - Env size
    * Byte 3-n - Env
    */
-  uint16_t envlen = strlen(env);
+  uint16_t envlen = strlen(g_env);
   eeprom_busy_wait(); /* Wait until eeprom is ready */
   eeprom_write_byte((void *)1, (envlen & 0xff00) >> 8);
   eeprom_busy_wait(); /* Wait until eeprom is ready */
   eeprom_write_byte((void *)2, envlen & 0x00ff);
   eeprom_busy_wait(); /* Wait until eeprom is ready */
-  eeprom_write_block(env, (void *)3, envlen);
+  eeprom_write_block(g_env, (void *)3, envlen);
   eeprom_busy_wait(); /* Wait until eeprom is ready */
   eeprom_write_byte((void *)0, EEPROM_INIT);
   prints("Environment saved, wrote %hu bytes\r\n", envlen);
@@ -221,8 +329,8 @@ void env_restore(void)
     envlen |= eeprom_read_byte((void *)2);
     if (envlen <= EEPROM_SIZE) {
       prints("Reading %hu bytes from EEPROM\r\n", envlen);
-      eeprom_read_block(env, (void *)3, envlen);
-      env[envlen] = '\0';
+      eeprom_read_block(g_env, (void *)3, envlen);
+      g_env[envlen] = '\0';
       prints("Environment restored, read %hu bytes\r\n", envlen);
     }  else {
       prints("Invalid size of environment: %lu\r\n", envlen);
@@ -231,5 +339,4 @@ void env_restore(void)
     prints("No environment exists in EEPROM\r\n");
   }
 }
-
 

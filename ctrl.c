@@ -39,7 +39,7 @@ void ctrl_update(void)
     return;
   }
 
-  if (env_get("T_SET", tmp, sizeof(tmp)) <= 0) {
+  if (env_get("T_SET", tmp, sizeof(tmp)) < 0) {
     return;
   }
   
@@ -48,7 +48,7 @@ void ctrl_update(void)
     return;
   }
 
-  if (env_get("T_HYST", tmp, sizeof(tmp)) <= 0) {
+  if (env_get("T_HYST", tmp, sizeof(tmp)) < 0) {
     return;
   }
   

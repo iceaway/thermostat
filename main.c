@@ -34,6 +34,7 @@ struct cmd {
 int cmd_test(int argc, char *argv[]);
 int cmd_help(int argc, char *argv[]);
 int cmd_set(int argc, char *argv[]);
+int cmd_get(int argc, char *argv[]);
 int cmd_echo(int argc, char *argv[]);
 int cmd_env(int argc, char *argv[]);
 //int cmd_pin(int argc, char *argv[]);
@@ -57,6 +58,7 @@ const struct cmd commands[] = {
   { "help", "print help", cmd_help },
   { "test", "Test command", cmd_test },
   { "set",  "Set environment variables", cmd_set },
+  { "get",  "Get environment variables", cmd_get },
   { "echo", "Print environment variables", cmd_echo },
   { "env",  "Environment commands", cmd_env },
 //  { "pin",  "Set pin no high/low", cmd_pin },
@@ -414,6 +416,22 @@ int cmd_pin(int argc, char *argv[])
 }
 #endif
 
+int cmd_get(int argc, char *argv[])
+{
+  char val[MAX_VALUE_LEN+1];
+
+  if (argc < 1) {
+    prints("Not enough arguments\r\n");
+  } else {
+    if (env_get(argv[1], val, sizeof(val)) < 0)
+      prints("Failed to get %s\r\n", argv[1]);
+    else
+      prints("%s=%s\r\n", argv[1], val);
+  }
+
+  return 0;
+
+}
 int cmd_set(int argc, char *argv[])
 {
   char *eq;
