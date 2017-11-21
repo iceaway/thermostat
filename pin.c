@@ -2,6 +2,7 @@
 #include <avr/io.h>
 #include "main.h"
 #include "pin.h"
+#include "prints.h"
 
 enum pinmode {
   PIN_HIGH,
@@ -18,6 +19,26 @@ struct pinport {
 };
 
 struct pinport pinportmap[] = {
+#if defined (__AVR_ATmega328P__) || defined (__AVR_ATmega328__)
+  { A0,  &PORTC, &DDRC, &PINC, PC0 },
+  { A1,  &PORTC, &DDRC, &PINC, PC1 },
+  { A2,  &PORTC, &DDRC, &PINC, PC2 },
+  { A3,  &PORTC, &DDRC, &PINC, PC3 },
+  { A4,  &PORTC, &DDRC, &PINC, PC4 },
+  { A5,  &PORTC, &DDRC, &PINC, PC5 },
+  { D0,  &PORTD, &DDRD, &PIND, PD0 },
+  { D1,  &PORTD, &DDRD, &PIND, PD1 },
+  { D2,  &PORTD, &DDRD, &PIND, PD2 },
+  { D3,  &PORTD, &DDRD, &PIND, PD3 },
+  { D4,  &PORTD, &DDRD, &PIND, PD4 },
+  { D5,  &PORTD, &DDRD, &PIND, PD5 },
+  { D6,  &PORTD, &DDRD, &PIND, PD6 },
+  { D7,  &PORTD, &DDRD, &PIND, PD7 },
+  { D8,  &PORTB, &DDRB, &PINB, PB0 },
+  { D9,  &PORTB, &DDRB, &PINB, PB1 },
+  { D10,  &PORTB, &DDRB, &PINB, PB2 },
+  { D11,  &PORTB, &DDRB, &PINB, PB3 },
+#elif defined (__AVR_ATmega2560__)
   { 0,  &PORTF, &DDRF, &PINF, PF0 }, /* ANALOG PIN ZERO !!! */
   { 19, &PORTD, &DDRD, &PIND, PD2 },
   { 20, &PORTD, &DDRD, &PIND, PD1 },
@@ -37,6 +58,9 @@ struct pinport pinportmap[] = {
   { 38, &PORTD, &DDRD, &PIND, PD7 },
   { 39, &PORTG, &DDRG, &PING, PG2 },
   { 0,  NULL,   NULL,  NULL,  0 }
+#else
+#error Unsupported MCU
+#endif
 };
 
 /****************************************************************************

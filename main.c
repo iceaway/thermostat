@@ -1,6 +1,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
+#include <avr/pgmspace.h>
+#include <ctype.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,9 +15,11 @@
 #include "sched.h"
 #include "pin.h"
 #include "heater.h"
+#include "prints.h"
 
-#define PRINTS_BUFSIZE  128
 #define MAX_ARGC        8 
+
+#define CMD_RAMDUMP
 
 #define MIN(a,b)  ((a) < (b) ? (a) : (b))
 
@@ -31,19 +35,29 @@ struct cmd {
   int (*callback_fn)(int argc, char *argv[]);
 };
 
-int cmd_test(int argc, char *argv[]);
 int cmd_help(int argc, char *argv[]);
+#ifdef CMD_TEST
+int cmd_test(int argc, char *argv[]);
+#endif
 int cmd_set(int argc, char *argv[]);
 int cmd_get(int argc, char *argv[]);
+#ifdef CMD_ECHO
 int cmd_echo(int argc, char *argv[]);
+#endif
 int cmd_env(int argc, char *argv[]);
-//int cmd_pin(int argc, char *argv[]);
+#ifdef CMD_PIN
+int cmd_pin(int argc, char *argv[]);
+#endif
 int cmd_reboot(int argc, char *argv[]);
 int cmd_time(int argc, char *argv[]);
+#ifdef CMD_ADC
 int cmd_adc(int argc, char *argv[]);
+#endif
 int cmd_temp(int argc, char *argv[]);
 int cmd_ctrl(int argc, char *argv[]);
+#ifdef CMD_RAMDUMP
 int cmd_ramdump(int argc, char *argv[]);
+#endif
 int cmd_heat(int argc, char *argv[]);
 
 static void echo(char data);
@@ -55,16 +69,26 @@ static struct rbuf g_txbuf_terminal;
 static uint32_t g_ticks = 0;
 
 const struct cmd commands[] = {
-  { "help", "print help", cmd_help },
+  { "help", "Print help", cmd_help },
+#ifdef CMD_TEST
   { "test", "Test command", cmd_test },
-  { "set",  "Set environment variables", cmd_set },
-  { "get",  "Get environment variables", cmd_get },
+#endif
+  { "set",  "Set environment variable", cmd_set },
+  { "get",  "Get environment variable", cmd_get },
+#ifdef CMD_ECHO
   { "echo", "Print environment variables", cmd_echo },
+#endif
   { "env",  "Environment commands", cmd_env },
-//  { "pin",  "Set pin no high/low", cmd_pin },
+#ifdef CMD_PIN
+  { "pin",  "Set pin no high/low", cmd_pin },
+#endif
   { "time", "Display uptime in [ms]", cmd_time },
+#ifdef CMD_RAMDUMP
   { "ramdump", "Dump ram", cmd_ramdump },
+#endif
+#ifdef CMD_ADC
   { "adc",   "Display raw ADC value", cmd_adc },
+#endif
   { "ctrl",   "Enable/disable control loop", cmd_ctrl },
   { "heat", "Turn on/off heater", cmd_heat },
   { "temp", "Show current temperature", cmd_temp },
@@ -125,7 +149,9 @@ static void transmit(void)
  ****************************************************************************/
 static void print_char(char data)
 {
+  cli();
   rbuf_push(&g_txbuf_terminal, data);
+  sei();
   transmit();
 }
 
@@ -139,8 +165,7 @@ ISR(TIMER0_COMPA_vect)
 {
   ++g_ticks;
   if ((g_ticks % 400) == 0) {
-    PORTC ^= (1 << PC7);
-    PORTB ^= _BV(PORTB7);
+    PORTB ^= _BV(PORTB5);
   }
   sched_update();
 }
@@ -149,7 +174,13 @@ ISR(TIMER0_COMPA_vect)
  * Called when USART0 is ready to receive another byte in the transmit
  * register. 
  */
+#if defined (__AVR_ATmega328P__) || defined (__AVR_ATmega328__)
+ISR(USART_UDRE_vect)
+#elif defined (__AVR_ATmega2560__)
 ISR(USART0_UDRE_vect)
+#else
+#error Unsupported MCU
+#endif
 {
   char tmp;
   if (rbuf_pop(&g_txbuf_terminal, &tmp)) {
@@ -161,7 +192,13 @@ ISR(USART0_UDRE_vect)
 }
 
 /* USART0_RX ISR: Called when a byte is received on USART0 */
+#if defined (__AVR_ATmega328P__) || defined (__AVR_ATmega328__)
+ISR(USART_RX_vect)
+#elif defined (__AVR_ATmega2560__)
 ISR(USART0_RX_vect)
+#else
+#error Unsupported MCU
+#endif
 {
   uint8_t tmp;
 
@@ -173,10 +210,9 @@ ISR(USART0_RX_vect)
 * Name: print_string 
 *
 * Description:
-*   Sends a string on the given USART device
+*   Sends a string on the terminal serial port
 *
 * Input Parameters:
-*   dev       - USART device. 0 = Debug terminal, 1 = Test script
 *   string    - The string to send
 *
 * Returned Value:
@@ -185,66 +221,48 @@ ISR(USART0_RX_vect)
 * Assumptions/Limitations:
 *
 ****************************************************************************/
-static void print_string(char *string)
+void print_string(char *string)
 {
   struct rbuf *rb = NULL;
 
   rb = &g_txbuf_terminal;
 
   while (*string) {
-    while (rbuf_push(rb, *string) != 1);
-    string++;
+    /* Disable interrupts while accessing the rbuf */
+    cli();
+    if (rbuf_push(rb, *string) != 1) {
+      /* Enable interrupts before transmitting */
+      sei();
+      transmit();
+      /* Wait until everything is sent before continuing */
+      while (!rbuf_empty(rb))
+        ;
+    } else {
+      sei();
+      string++;
+    }
   } 
 
   transmit();
 }
 
-/****************************************************************************
-* Name: prints
-*
-* Description:
-*   Sends a formatted string to the debug terminal
-*
-* Input Parameters:
-*   fmt       - Format string (printf style)
-*   ...       - Values used in the format string
-*
-* Returned Value:
-*   Number of bytes sent
-*
-* Assumptions/Limitations:
-*
-****************************************************************************/
-int prints(const char *fmt, ...)
-{
-  va_list ap;
-  char buf[PRINTS_BUFSIZE];
-  int size;
-
-  va_start(ap, fmt);
-  size = vsnprintf(buf, sizeof(buf), fmt, ap);
-  va_end(ap);
-
-  print_string(buf);
-  return size;
-}
 
 int cmd_heat(int argc, char *argv[])
 {
   if (argc < 2) {
-    prints("Not enough arguments. Usage: %s [ on | off ]\r\n",
+    prints(PSTR("Not enough arguments. Usage: %s [ on | off ]\r\n"),
            argv[0]);
     return -1;
   }
 
   if (strcmp(argv[1], "on") == 0) {
-    prints("Enabling heater\r\n");
+    prints(PSTR("Enabling heater\r\n"));
     heater_on();
   } else if (strcmp(argv[1], "off") == 0) {
-    prints("Disabling heater\r\n");
+    prints(PSTR("Disabling heater\r\n"));
     heater_off();
   } else {
-    prints("Invalid argument: %s\r\n", argv[1]);
+    prints(PSTR("Invalid argument: %s\r\n"), argv[1]);
     return -1;
   }
 
@@ -254,22 +272,22 @@ int cmd_heat(int argc, char *argv[])
 int cmd_ctrl(int argc, char *argv[])
 {
   if (argc < 2) {
-    prints("Not enough arguments. Usage: %s [ enable | disable | status ]\r\n",
+    prints(PSTR("Not enough arguments. Usage: %s [ enable | disable | status ]\r\n"),
            argv[0]);
     return -1;
   }
 
   if (strcmp(argv[1], "enable") == 0) {
-    prints("Enabling control loop\r\n");
+    prints(PSTR("Enabling control loop\r\n"));
     ctrl_enable();
   } else if (strcmp(argv[1], "disable") == 0) {
-    prints("Disabling control loop\r\n");
+    prints(PSTR("Disabling control loop\r\n"));
     ctrl_disable();
   } else if (strcmp(argv[1], "status") == 0) {
-    prints("Control loop is: %s\r\n",
-           ctrl_status() == 0 ? "Disabled" : "Enabled");
+    prints(PSTR("Control loop is: %s\r\n"),
+           ctrl_status() == 0 ? PSTR("Disabled") : PSTR("Enabled"));
   } else {
-    prints("Invalid argument: %s\r\n", argv[1]);
+    prints(PSTR("Invalid argument: %s\r\n"), argv[1]);
     return -1;
   }
 
@@ -279,7 +297,7 @@ int cmd_ctrl(int argc, char *argv[])
 void print_temp(void)
 {
   float temp = temperature_get();
-  prints("Temperature: %d\r\n", (int)round(temp*10));
+  prints(PSTR("Temperature: %d\r\n"), (int)round(temp*10));
 }
 
 int cmd_temp(int argc, char *argv[])
@@ -291,7 +309,7 @@ int cmd_temp(int argc, char *argv[])
   if (argc > 1) {
     interval = atoi(argv[1]);
     if (interval > 0) {
-      prints("Displaying temperature with %d ms interval.");
+      prints(PSTR("Displaying temperature with %d ms interval."), interval);
       id = sched_add_task(print_temp, 1, interval, "temp");
     } else {
       sched_delete_task(id);
@@ -299,11 +317,12 @@ int cmd_temp(int argc, char *argv[])
   }
 
   temp = temperature_get();
-  prints("Temperature: %d\r\n", (int)round(temp*10));
+  prints(PSTR("Temperature: %d\r\n"), (int)round(temp*10));
 
   return 0;
 }
 
+#ifdef CMD_ADC
 int cmd_adc(int argc, char *argv[])
 {
   uint16_t val;
@@ -312,19 +331,38 @@ int cmd_adc(int argc, char *argv[])
   uint32_t resistance;
 
   val = adc_get();
-  prints("ADC Value: %u\r\n", val);
+  prints(PSTR("ADC Value: %u\r\n"), val);
   
   voltage = 3300UL * (uint32_t)val / 1023UL; /* Voltage in mV */
-  prints("Voltage: %lu mV\r\n", voltage);
+  prints(PSTR("Voltage: %lu mV\r\n"), voltage);
 
   tmp = (1023UL * 1000UL / val) - 1000UL;
   resistance = 1000UL * 10000UL  / tmp;
 
-  prints("Resistance: %lu Ohm\r\n", resistance);
+  prints(PSTR("Resistance: %lu Ohm\r\n"), resistance);
 
   return 0;
 }
+#endif
 
+void dump_ram(void)
+{
+  uint8_t *endptr, *ptr;
+  uint16_t row;
+  endptr = (uint8_t *)(0x200+0x800);
+  row = 0;
+  ptr = (uint8_t *)0x200;
+  while (ptr <= endptr) {
+    if ((row % 8) == 0)
+      prints("\r\n%04x    ", ptr);
+    prints("%02x ", *ptr); 
+    ++row;
+    ++ptr;
+  }
+  prints("\r\n");
+}
+
+#ifdef CMD_RAMDUMP
 int cmd_ramdump(int argc, char *argv[])
 {
   uint16_t start;
@@ -332,20 +370,22 @@ int cmd_ramdump(int argc, char *argv[])
   uint16_t row;
   uint8_t *endptr;
   uint8_t *ptr;
+#define SRAM_START  0x0100
+#define SRAM_END    0x08FF
 
-  prints("end = %04x, stack = %04x\r\n", &_end, &__stack);
+  prints(PSTR("end = %04x, stack = %04x\r\n"), &_end, &__stack);
 
   if (argc >= 3) {
     start = strtoul(argv[1], NULL, 16);
     n = strtoul(argv[2], NULL, 16);
 
-    if ((start < 0x200) || (start > 0x21FF)) {
-      prints("Invalid start address\r\n");
+    if ((start < SRAM_START) || (start > SRAM_END)) {
+      prints(PSTR("Invalid start address\r\n"));
       return 0;
     }
 
-    if ((start + n) > 0x21FF) {
-      prints("Range is outside RAM space\r\n");
+    if ((start + n) > SRAM_END) {
+      prints(PSTR("Range is outside RAM space\r\n"));
       return 0;
     }
 
@@ -361,19 +401,20 @@ int cmd_ramdump(int argc, char *argv[])
     }
     prints("\r\n");
   } else {
-    prints("Not enough arguments. Usage: %s <start_addr> <size>\r\n", argv[0]);
+    prints(PSTR("Not enough arguments. Usage: %s <start_addr> <size>\r\n"), argv[0]);
   }
 
   return 0;
 }
+#endif
 
 int cmd_time(int argc, char *argv[])
 {
-  prints("Current uptime is: %lu ms\r\n", g_ticks);
+  prints(PSTR("Current uptime is: %lu ms\r\n"), g_ticks);
   return 0;
 }
 
-#if 0
+#ifdef CMD_PIN
 int cmd_pin(int argc, char *argv[])
 {
   int pin;
@@ -381,7 +422,7 @@ int cmd_pin(int argc, char *argv[])
   
   if ((argc >= 2) && (strcmp(argv[1], "list") == 0)) {
     pp = &pinportmap[0];
-    prints("Available pins:\r\n");
+    prints(PSTR("Available pins:\r\n"));
     while (pp->port) {
       prints("%u\r\n", pp->pin_no);
       ++pp;
@@ -390,26 +431,26 @@ int cmd_pin(int argc, char *argv[])
     pin = atoi(argv[1]);
     
     if ((pin < 0) | (pin > 53)) {
-      prints("Invalid pin number: %d\r\n", pin);
+      prints(PSTR("Invalid pin number: %d\r\n"), pin);
       return 0;
     }
 
     if ((strcmp(argv[2], "high") == 0) || 
         (strcmp(argv[2], "h") == 0)) {
       if (pin_high(pin) == 0) {
-        prints("Unavailable pin: %d\r\n", pin);
+        prints(PSTR("Unavailable pin: %d\r\n"), pin);
       }
     } else if ((strcmp(argv[2], "low") == 0) || 
                (strcmp(argv[2], "l") == 0)) {
       if (pin_low(pin) == 0) {
-        prints("Unavailable pin: %d\r\n", pin);
+        prints(PSTR("Unavailable pin: %d\r\n"), pin);
       }
     } else {
-      prints("Invalid mode: '%s'\r\n", argv[2]);
+      prints(PSTR("Invalid mode: '%s'\r\n"), argv[2]);
       return 0;
     }
   } else {
-    prints("Not enough arguments\r\n");
+    prints(PSTR("Not enough arguments\r\n"));
   }
 
   return 0;
@@ -421,10 +462,10 @@ int cmd_get(int argc, char *argv[])
   char val[MAX_VALUE_LEN+1];
 
   if (argc < 1) {
-    prints("Not enough arguments\r\n");
+    prints(PSTR("Not enough arguments\r\n"));
   } else {
     if (env_get(argv[1], val, sizeof(val)) < 0)
-      prints("Failed to get %s\r\n", argv[1]);
+      prints(PSTR("Failed to get %s\r\n"), argv[1]);
     else
       prints("%s=%s\r\n", argv[1], val);
   }
@@ -439,7 +480,7 @@ int cmd_set(int argc, char *argv[])
   char *val;
 
   if (argc < 2) {
-    prints("Not enough arguments\r\n");
+    prints(PSTR("Not enough arguments\r\n"));
   } else {
     if ((eq = strstr(argv[1], "=")) != NULL) {
       *eq = '\0';
@@ -463,10 +504,10 @@ int cmd_env(int argc, char *argv[])
     } else if (strcmp(argv[1], "clear") == 0) {
       env_clear();
     } else {
-      prints("Unknown argument.\r\n");
+      prints(PSTR("Unknown argument.\r\n"));
     }
   } else {
-    prints("Not enough arguments\r\n");
+    prints(PSTR("Not enough arguments\r\n"));
   }
   return 0;
 }
@@ -477,6 +518,7 @@ int cmd_reboot(int argc, char *argv[])
   return 0;
 }
 
+#ifdef CMD_ECHO
 int cmd_echo(int argc, char *argv[])
 {
   char *var = NULL;
@@ -484,14 +526,14 @@ int cmd_echo(int argc, char *argv[])
   int len;
 
   if (argc < 2) {
-    prints("Not enough arguments\r\n");
+    prints(PSTR("Not enough arguments\r\n"));
   } else {
     if (argv[1][0] == '$') {
       var = argv[1]+1;
       if ((len = env_get(var, value, sizeof(value))) >= 0)
         prints("%s (%d)\r\n", value, len);
       else
-        prints("Variable does not exist\r\n");
+        prints(PSTR("Variable does not exist\r\n"));
 
     } else {
       prints(argv[1]);
@@ -500,16 +542,19 @@ int cmd_echo(int argc, char *argv[])
 
   return 0;
 }
+#endif
 
+#ifdef CMD_TEST
 int cmd_test(int argc, char *argv[])
 {
   (void)argc;
   (void)argv;
-  prints("cunter value: %u\r\n", TCNT1);
-  prints("overflow reg: %02x\r\n", TIFR1);
-  prints("timsk1 reg:   %02x\r\n", TIMSK1);
+  prints(PSTR("cunter value: %u\r\n"), TCNT1);
+  prints(PSTR("overflow reg: %02x\r\n"), TIFR1);
+  prints(PSTR("timsk1 reg:   %02x\r\n"), TIMSK1);
   return 0;
 }
+#endif
 
 int cmd_help(int argc, char *argv[])
 {
@@ -517,9 +562,9 @@ int cmd_help(int argc, char *argv[])
   (void)argc;
   (void)argv;
   p = &commands[0];
-  prints("Available commands:\r\n");
+  prints(PSTR("Available commands:\r\n"));
   while (p->cmd) {
-    prints("%-15s - %s\r\n", p->cmd, p->help);
+    prints(PSTR("%-15s - %s\r\n"), p->cmd, p->help);
     ++p;
   } 
   return 0;
@@ -608,6 +653,7 @@ static int parse_cmd(char data)
     if ((data == ASCII_BS) || (data == ASCII_DEL)) {
       idx = idx > 0 ? idx - 1 : idx;
     } else {
+      //prints("store in buf: %c\r\n", data);
       buf[idx++] = data;
     }
 
@@ -638,7 +684,7 @@ static int parse_cmd(char data)
       }
 
       if (!p->cmd)
-        prints("Unknown command: '%s'\r\n", buf);
+        prints(PSTR("Unknown command: '%s'\r\n"), buf);
 
     }
     ret = 1;
@@ -653,7 +699,12 @@ static void echo(char data)
   if (g_echo) {
     if (data == ASCII_DEL) /* Make backspace work */
       data = ASCII_BS;
-    print_char(data);
+    if (isprint(data) || 
+        (data == ASCII_BS) ||
+        (data == '\r') ||
+        (data == '\n')) 
+       
+      print_char(data);
   }
 }
 
@@ -672,70 +723,20 @@ static void init_wd(void)
 
 static void init_gpio(void)
 {
-#if 0
-  /* Default is INPUT */
-  //DDRD &= ~((1 << DDD2) | (1 << DDD1) | (1 << DDD0));
 
-  /* Set PC7 as output for scope external trigger */
-  DDRC = (1 << DDC7);
-
-  /* Start with pin low */
-  PORTC &= ~(1 << PC7);
-
-  /* XT-1 Reset pin as output */
-  DDRA = (1 << DDA0);
-
-  /* XT-1 boot loader pin in as output */
-  DDRC |= (1 << DDC5);
-
-  /* Disable pull-ups */
-  PORTD &= ~((1 << PD2) | (1 << PD1) | (1 << PD0));
-  //PORTD |= ((1 << PD2) | (1 << PD1) | (1 << PD0)); /* Enable pull-up, for testing */
-
-  /* Trigger on falling edge for D0 and D1 */
-  EICRA |= (1 << ISC01) | (1 << ISC11);
-
-  /* Any level change for CardLoad */
-  EICRA |= (1 << ISC20);
-  
-  /* Clear any outstanding interrupts */
-  EIFR = (1 << INT0) | (1 << INT1) | (1 << INT2);
-
-  /* Interrupt enable mask */
-  EIMSK |= (1 << INT0) | (1 << INT1) | (1 << INT2);
-#endif
-
-  /* Set ADC input as tri-stated (input, no pull-up) */
-  pin_input(0, 0);
-
-  /*  */
-  pin_output(37);
-  pin_low(37);
+  temperature_init_gpio();
+  heater_init_gpio();
 
   /* For blinking the diode */
-  DDRB |= _BV(DDB7);
+  DDRB |= _BV(DDB5);
+
+  /* For debugging - digital pin 12 */
+  DDRB |= _BV(DDB4);
 
 }
 
 static void init_usart(void)
 {
-  /* USART3 = Terminal */
-
-  /* Set baud rate to 115200 */
-  UBRR3H = 0;
-  UBRR3L = 8;
-
-  /* Enable TX and RX */
-  UCSR3B = (1 << RXEN3) | (1 << TXEN3);
-
-  /* Set 8N1 frame format */
-  UCSR3C = (1 << USBS3) | (3 << UCSZ30);
-
-  /* Enable RX interrupt */
-  UCSR3B |= (1 << RXCIE3);
-
-  /* USART0 = To test system */
-
   /* Set baud rate to 9600 */
   UBRR0H = 0;
   UBRR0L = 103; /* for 9600, required for USART0 (USB) */
@@ -767,18 +768,19 @@ int main(void)
   sei(); 
 
   /* Restore the environment from EEPROM */
-  prints("Restoring environment...\r\n");
+  prints(PSTR("Restoring environment...\r\n"));
   env_restore(); /* TODO: This halts execution? */
 
   sched_add_task(ctrl_update, 1, 500, "ctrl");
 
-  prints("\r\nWelcome to PellShell\r\n");
+  prints(PSTR("\r\nWelcome to PellShell\r\n"));
   prints(">> ");
   for (;;) {
     /* Handle data from the debug terminal */
     if (rbuf_pop(&g_rxbuf_terminal, &tmp)) {
-      if (parse_cmd(tmp))
+      if (parse_cmd(tmp)) {
         prints(">> ");
+      }
     }
 
     sched_runtasks();

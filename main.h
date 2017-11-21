@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-int prints(const char *fmt, ...);
+void print_string(char *string);
 uint32_t get_ticks(void);
 
 #endif

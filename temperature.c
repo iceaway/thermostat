@@ -2,6 +2,7 @@
 #include "temperature.h"
 #include "adc.h"
 #include "env.h"
+#include "pin.h"
 
 /* NTC values */
 #define RES     10000UL /* Series resistor in Ohm */
@@ -10,6 +11,12 @@
 
 #define BETA_MIN  3000.0f /* Sanity check, min allowed value for BETA */
 #define BETA_MAX  4000.0f /* Sanity check, max allowed value for BETA */
+
+void temperature_init_gpio(void)
+{
+  /* Set ADC input as tri-stated (input, no pull-up) */
+  pin_input(0, 0);
+}
 
 static float adc2temp(uint16_t val)
 {

@@ -1,9 +1,11 @@
+#include <avr/pgmspace.h>
 #include "ctrl.h"
 #include "env.h"
 #include "adc.h"
 #include "temperature.h"
 #include "heater.h"
 #include "main.h"
+#include "prints.h"
 
 enum heater_state {
   HEATER_OFF,

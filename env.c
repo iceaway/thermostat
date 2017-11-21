@@ -1,13 +1,21 @@
 #include <string.h>
 #include <stdio.h>
 #include <avr/eeprom.h>
+#include <avr/pgmspace.h>
 #include <util/delay.h>
 #include "env.h"
 #include "main.h"
+#include "prints.h"
 
-#define ENV_SIZE        128
+#define ENV_SIZE        64
 #define EEPROM_INIT     0xAB
+#if defined (__AVR_ATmega328P__) || defined (__AVR_ATmega328__)
+#define EEPROM_SIZE     1024
+#elif defined (__AVR_ATmega2560__)
 #define EEPROM_SIZE     4096
+#else
+#error Unsupported MCU
+#endif
 
 #define MIN(a,b)  ((a) < (b) ? (a) : (b))
 
@@ -55,19 +63,20 @@ static void garbage_collect(void)
   end = strlen(g_env);
   pre_size = end;
   if (end > ENV_SIZE) {
-    prints("Env is somehow too big.\r\n");
+    prints(PSTR("Env is somehow too big.\r\n"));
     return;
   }
 
   if (end == 0) {
-    prints("Env is empty, no need to gc\r\n");
+    prints(PSTR("Env is empty, no need to gc\r\n"));
     return;
   }
 
   memset(g_env_gc, 0, sizeof(g_env_gc));
 
   p = g_env; 
-  prints("Current env: '%s'\r\n", g_env);
+  prints(PSTR("Current env: '%s'\r\n"), g_env);
+  /* TODO: This does not seem to work anymore, gets stuck in endless loop */
   while (p) {
     endp = strchr(p, '=');
     /* endp now points to the END of the first var=value pair */
@@ -94,12 +103,12 @@ static void garbage_collect(void)
       }
     } else {
       /* End of environment reached! */
-      prints("Found the end of the environment, replacing old environment\r\n");
+      prints(PSTR("Found the end of the environment, replacing old environment\r\n"));
       memcpy(g_env, g_env_gc, gcidx);
       g_env[gcidx] = '\0';
       env_save();
       post_size = gcidx;
-      prints("Garbage collect saved %d bytes\r\n", pre_size - post_size);
+      prints(PSTR("Garbage collect saved %d bytes\r\n"), pre_size - post_size);
       break;
     }
     p = strchr(p+1, ';');
@@ -156,7 +165,7 @@ static int env_get_internal(char *env, char const *var, char *value, size_t size
     ++startp;
     endp = strchr(valp, ';');
     if (!endp || !startp) {
-      prints("Error in environment!\r\n");
+      prints(PSTR("Error in environment!\r\n"));
       return 0;
     } else {
       if (value && size) {
@@ -196,16 +205,17 @@ int env_set(char const *var, char *val)
   int tmp;
   
   if ((vallen + varlen) > (ENV_SIZE - (int)strlen(g_env) - 2)) {
-    prints("Environment is full, garbage collecting.\r\n");
+    prints(PSTR("Environment is full, garbage collecting.\r\n"));
     /* Do garbage collection here and remove all old versions of 
      * variables. Try to save new value again.
      */
     garbage_collect();
+    /* TODO: If var still does not fit - this loops endlessly */
     return env_set(var, val);
   } else if (varlen > 0) {
     /* Convert ; (reserved as delimiter) to . */
     if (strchr(var, ';') || strchr(var, '=')) {
-      prints("Not allowed to have ';' or '=' in the variable name.\r\n");
+      prints(PSTR("Not allowed to have ';' or '=' in the variable name.\r\n"));
       return -1;
     }
 
@@ -219,11 +229,11 @@ int env_set(char const *var, char *val)
       *p = '.';
 
     tmp = snprintf(g_env+strlen(g_env), ENV_SIZE - strlen(g_env), "%s=%s;", var, val);
-    prints("wrote %d bytes to env\r\n", tmp);
+    prints(PSTR("wrote %d bytes to env\r\n"), tmp);
     env_save();
     return tmp;
   } else {
-    prints("No variable given\r\n");
+    prints(PSTR("No variable given\r\n"));
     return 0;
   }
 }
@@ -266,6 +276,8 @@ void env_clear(void)
 void env_dump(void)
 {
   prints(g_env);
+  prints("\r\n");
+
 }
 
 /****************************************************************************
@@ -300,7 +312,8 @@ void env_save(void)
   eeprom_write_block(g_env, (void *)3, envlen);
   eeprom_busy_wait(); /* Wait until eeprom is ready */
   eeprom_write_byte((void *)0, EEPROM_INIT);
-  prints("Environment saved, wrote %hu bytes\r\n", envlen);
+  eeprom_busy_wait(); /* Wait until eeprom is ready */
+  prints(PSTR("Environment saved, wrote %hu bytes\r\n"), envlen);
 }
 
 /****************************************************************************
@@ -328,15 +341,15 @@ void env_restore(void)
     eeprom_busy_wait(); /* Wait until eeprom is ready */
     envlen |= eeprom_read_byte((void *)2);
     if (envlen <= EEPROM_SIZE) {
-      prints("Reading %hu bytes from EEPROM\r\n", envlen);
+      prints(PSTR("Reading %hu bytes from EEPROM\r\n"), envlen);
       eeprom_read_block(g_env, (void *)3, envlen);
       g_env[envlen] = '\0';
-      prints("Environment restored, read %hu bytes\r\n", envlen);
+      prints(PSTR("Environment restored, read %hu bytes\r\n"), envlen);
     }  else {
-      prints("Invalid size of environment: %lu\r\n", envlen);
+      prints(PSTR("Invalid size of environment: %lu\r\n"), envlen);
     }
   } else {
-    prints("No environment exists in EEPROM\r\n");
+    prints(PSTR("No environment exists in EEPROM\r\n"));
   }
 }
 

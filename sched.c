@@ -2,7 +2,7 @@
 #include "main.h"
 #include "sched.h"
 
-#define MAX_TASKS 16
+#define MAX_TASKS 4
 #define MAX_NAME_LEN  8
 
 struct task {
