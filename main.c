@@ -285,7 +285,7 @@ int cmd_ctrl(int argc, char *argv[])
     ctrl_disable();
   } else if (strcmp(argv[1], "status") == 0) {
     prints(PSTR("Control loop is: %s\r\n"),
-           ctrl_status() == 0 ? PSTR("Disabled") : PSTR("Enabled"));
+           ctrl_status() == 0 ? "Disabled" : "Enabled");
   } else {
     prints(PSTR("Invalid argument: %s\r\n"), argv[1]);
     return -1;
@@ -309,7 +309,7 @@ int cmd_temp(int argc, char *argv[])
   if (argc > 1) {
     interval = atoi(argv[1]);
     if (interval > 0) {
-      prints(PSTR("Displaying temperature with %d ms interval."), interval);
+      prints(PSTR("Displaying temperature with %d ms interval.\r\n"), interval);
       id = sched_add_task(print_temp, 1, interval, "temp");
     } else {
       sched_delete_task(id);
@@ -757,6 +757,7 @@ int main(void)
 
   /* Initialize USART rx/tx buffers */
   rbuf_init(&g_txbuf_terminal);
+  rbuf_init(&g_rxbuf_terminal);
 
   /* Initalize peripherals */
   init_gpio();
