@@ -38,7 +38,6 @@ int rbuf_pop(struct rbuf *rb, char *data)
     --rb->count;
     return 1;
   } else {
-    *data = NULL;
     return 0;
   }
 }

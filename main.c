@@ -15,6 +15,7 @@
 #include "sched.h"
 #include "pin.h"
 #include "heater.h"
+#include "cooling.h"
 #include "prints.h"
 
 #define MAX_ARGC        8 
@@ -726,6 +727,7 @@ static void init_gpio(void)
 
   temperature_init_gpio();
   heater_init_gpio();
+  cooling_init_gpio();
 
   /* For blinking the diode */
   DDRB |= _BV(DDB5);

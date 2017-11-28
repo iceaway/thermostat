@@ -4,30 +4,34 @@
 #include "adc.h"
 #include "temperature.h"
 #include "heater.h"
+#include "cooling.h"
 #include "main.h"
 #include "prints.h"
 
-enum heater_state {
-  HEATER_OFF,
-  HEATER_ON
+enum ctrl_state {
+  OFF,
+  IDLE,
+  HEATING,
+  COOLING
 };
 
-static int g_enabled = 0;
-static int g_state = HEATER_OFF;
+static int g_state = OFF;
+static unsigned int g_laston = 0;
 
 void ctrl_enable(void)
 {
-  g_enabled = 1;
+  g_state = IDLE;
+  g_laston = get_ticks();
 }
 
 void ctrl_disable(void)
 {
-  g_enabled = 0;
+  g_state = OFF;
 }
 
 int ctrl_status(void)
 {
-  return g_enabled;
+  return g_state == OFF ? 0 : 1;
 }
 
 void ctrl_update(void)
@@ -35,11 +39,8 @@ void ctrl_update(void)
   char tmp[16];
   float t_set;
   float t_hyst;
+  int t_delay;
   float temp = temperature_get();
-
-  if (!g_enabled) {
-    return;
-  }
 
   if (env_get("T_SET", tmp, sizeof(tmp)) < 0) {
     return;
@@ -59,18 +60,50 @@ void ctrl_update(void)
     return;
   }
 
-  /* temp = temp_get(); */
-  if ((temp <= (t_set - t_hyst)) && (g_state == HEATER_OFF)) {
-    /* turn on heater */
-    prints("Turning ON heater\r\n");
-    g_state = HEATER_ON;
-    heater_on();
-  } else if ((temp >= (t_set + t_hyst)) && (g_state == HEATER_ON)) {
-    /* turn off heater */
-    prints("Turning OFF heater\r\n");
-    g_state = HEATER_OFF;
-    heater_off();
-  } else {
-    /* between temperature limits, do nothing */
+  /* Delay before allowing the cooling to activate */
+  if (env_get("T_DELAY", tmp, sizeof(tmp)) < 0) {
+    return;
   }
+  t_delay = atoi(tmp);
+
+  if (t_delay < 0)
+      return;
+
+  switch (g_state) {
+  case OFF:
+    break;
+
+  case COOLING:
+    g_laston = get_ticks();
+    if (temp < t_set) {
+      cooling_off();
+      g_state = IDLE;
+    }
+    break;
+
+  case HEATING:
+    if (temp > t_set) {
+      heater_off();
+      g_state = IDLE;
+    }
+    break;
+
+  case IDLE:
+    if (temp <= (t_set - t_hyst)) {
+      heater_on();
+      g_state = HEATING;
+    } else if (temp >= (t_set + t_hyst)) {
+      if ((get_ticks() - g_laston ) >= (t_delay*1000)) {
+        cooling_on();
+        g_state = COOLING;
+      }
+    } else {
+      /* Temp is within range, do nothing */
+    }
+    break;
+
+  default:
+    /* Bad case... */
+    break;
+  } 
 }

@@ -1,6 +1,6 @@
 BIN=main
 OBJS  = main.o rbuf.o ctrl.o env.o adc.o temperature.o pin.o heater.o 
-OBJS += sched.o prints.o
+OBJS += sched.o prints.o cooling.o
 
 CC=avr-gcc
 OBJCOPY=avr-objcopy
