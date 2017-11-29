@@ -13,6 +13,7 @@
 #define BETA_MAX  4000.0f /* Sanity check, max allowed value for BETA */
 
 #define TEMPERATURE_PIN A0
+#define SCALE_FACTOR  10000UL
 
 void temperature_init_gpio(void)
 {
@@ -48,6 +49,15 @@ static float adc2temp(uint16_t val)
   temp -= 273.15f;
 
   return temp;
+}
+
+static uint32_t adc2res(uint16_t adc)
+{
+  uint32_t res;
+  uint32_t tmp = 1023UL*SCALE_FACTOR/adc - 1 * SCALE_FACTOR; 
+
+  res = RES*SCALE_FACTOR/tmp;
+  return res;
 }
 
 float temperature_get(void)
