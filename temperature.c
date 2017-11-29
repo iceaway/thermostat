@@ -12,10 +12,12 @@
 #define BETA_MIN  3000.0f /* Sanity check, min allowed value for BETA */
 #define BETA_MAX  4000.0f /* Sanity check, max allowed value for BETA */
 
+#define TEMPERATURE_PIN A0
+
 void temperature_init_gpio(void)
 {
   /* Set ADC input as tri-stated (input, no pull-up) */
-  pin_input(0, 0);
+  pin_input(TEMPERATURE_PIN, 0);
 }
 
 static float adc2temp(uint16_t val)

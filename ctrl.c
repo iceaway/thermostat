@@ -16,12 +16,13 @@ enum ctrl_state {
 };
 
 static int g_state = OFF;
-static unsigned int g_laston = 0;
+static uint32_t g_laston = 0;
 
 void ctrl_enable(void)
 {
   g_state = IDLE;
   g_laston = get_ticks();
+  prints(PSTR("Enabling ctrl loop, g_laston = %lu\r\n"), g_laston);
 }
 
 void ctrl_disable(void)
@@ -39,7 +40,7 @@ void ctrl_update(void)
   char tmp[16];
   float t_set;
   float t_hyst;
-  int t_delay;
+  uint32_t t_delay;
   float temp = temperature_get();
 
   if (env_get("T_SET", tmp, sizeof(tmp)) < 0) {
@@ -65,9 +66,15 @@ void ctrl_update(void)
     return;
   }
   t_delay = atoi(tmp);
+  t_delay *= 1000; /* Convert to ms */
 
+#if 0
   if (t_delay < 0)
       return;
+#endif
+
+  if (g_state != OFF)
+    prints(PSTR("Temperature: %d\r\n"), (int)round(temp*10));
 
   switch (g_state) {
   case OFF:
@@ -76,6 +83,7 @@ void ctrl_update(void)
   case COOLING:
     g_laston = get_ticks();
     if (temp < t_set) {
+      prints(PSTR("Going to IDLE\r\n"));
       cooling_off();
       g_state = IDLE;
     }
@@ -83,6 +91,7 @@ void ctrl_update(void)
 
   case HEATING:
     if (temp > t_set) {
+      prints(PSTR("Going to IDLE\r\n"));
       heater_off();
       g_state = IDLE;
     }
@@ -90,13 +99,20 @@ void ctrl_update(void)
 
   case IDLE:
     if (temp <= (t_set - t_hyst)) {
+      prints(PSTR("Going to HEATING\r\n"));
       heater_on();
       g_state = HEATING;
     } else if (temp >= (t_set + t_hyst)) {
-      if ((get_ticks() - g_laston ) >= (t_delay*1000)) {
+      uint32_t tdiff;
+      tdiff = get_ticks() - g_laston;
+      if (tdiff >= t_delay) {
+        prints(PSTR("Going to COOLING\r\n"));
         cooling_on();
         g_state = COOLING;
+      } else {
+        prints(PSTR("Cooling delay... %lu\r\n"), t_delay - tdiff);
       }
+
     } else {
       /* Temp is within range, do nothing */
     }

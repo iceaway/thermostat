@@ -774,7 +774,8 @@ int main(void)
   prints(PSTR("Restoring environment...\r\n"));
   env_restore(); /* TODO: This halts execution? */
 
-  sched_add_task(ctrl_update, 1, 500, "ctrl");
+  sched_add_task(ctrl_update, 1, 1000, "ctrl");
+  ctrl_enable();
 
   prints(PSTR("\r\nWelcome to PellShell\r\n"));
   prints(">> ");
