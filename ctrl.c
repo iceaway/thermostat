@@ -40,7 +40,7 @@ void ctrl_update(void)
   float t_set;
   float t_hyst;
   int t_delay;
-  float temp = temperature_get();
+  int32_t temp = temperature_get();
 
   if (env_get("T_SET", tmp, sizeof(tmp)) < 0) {
     return;

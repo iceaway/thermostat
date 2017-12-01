@@ -1,7 +1,9 @@
 #include <math.h>
+#include <avr/pgmspace.h>
 #include "temperature.h"
 #include "adc.h"
 #include "env.h"
+#include "prints.h"
 #include "pin.h"
 
 /* NTC values */
@@ -20,6 +22,7 @@ void temperature_init_gpio(void)
   pin_input(0, 0);
 }
 
+#ifdef ADC2TEMP_ORIG
 static float adc2temp(uint16_t val)
 {
   float tmp2;
@@ -49,6 +52,7 @@ static float adc2temp(uint16_t val)
 
   return temp;
 }
+#endif
 
 struct rt {
   int32_t res;
@@ -87,7 +91,7 @@ static uint32_t adc2res(uint16_t adc)
   return res;
 }
 
-static int32_t adc2temp_v2(uint16_t adc)
+static int32_t adc2temp(uint16_t adc)
 {
   int32_t res = adc2res(adc);
   unsigned int i = 0; 
@@ -115,7 +119,7 @@ static int32_t adc2temp_v2(uint16_t adc)
   return 0;
 }
 
-float temperature_get(void)
+int32_t temperature_get(void)
 {
   uint16_t adc = adc_get();
 
