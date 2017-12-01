@@ -11,15 +11,14 @@
 #define T_MAX   500
 #define T_MIN   -100
 
-enum ctrl_state {
-  OFF,
-  IDLE,
-  HEATING,
-  COOLING
-};
 
 static int g_state = OFF;
-static unsigned int g_laston = 0;
+static uint32_t g_laston = 0;
+
+int ctrl_state(void)
+{
+  return g_state;
+}
 
 void ctrl_enable(void)
 {
@@ -42,7 +41,7 @@ void ctrl_update(void)
   char tmp[16];
   int t_set;
   int t_hyst;
-  int t_delay;
+  uint32_t t_delay;
 
   int temp = temperature_get();
 
