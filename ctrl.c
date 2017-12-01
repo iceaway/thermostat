@@ -40,7 +40,6 @@ int ctrl_status(void)
 void ctrl_update(void)
 {
   char tmp[16];
-  char *p;
   int t_set;
   int t_hyst;
   int t_delay;
@@ -50,9 +49,6 @@ void ctrl_update(void)
   if (env_get("T_SET", tmp, sizeof(tmp)) < 0) {
     return;
   }
-
-  while (*p != '.')
-    ++p;
 
   t_set = atoi(tmp);
   if ((t_set < T_MIN) || (t_set > T_MAX)) {
