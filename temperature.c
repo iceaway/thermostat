@@ -8,51 +8,8 @@
 
 /* NTC values */
 #define RES     10000UL /* Series resistor in Ohm */
-#define BETA    3435.0f /* Beta coefficient for steinhart equation */
-#define NOMTEMP 25.0f   /* Nominal temperature of temp sensor */
-
-#define BETA_MIN  3000.0f /* Sanity check, min allowed value for BETA */
-#define BETA_MAX  4000.0f /* Sanity check, max allowed value for BETA */
 
 #define SCALE_FACTOR  10000UL
-
-void temperature_init_gpio(void)
-{
-  /* Set ADC input as tri-stated (input, no pull-up) */
-  pin_input(0, 0);
-}
-
-#ifdef ADC2TEMP_ORIG
-static float adc2temp(uint16_t val)
-{
-  float tmp2;
-  float temp;
-  float beta = BETA;
-  char tmp[16];
-
-
-  if (env_get("BETA", tmp, sizeof(tmp)) > 0) {
-    beta = atof(tmp);
-    if ((beta < BETA_MAX) && (beta > BETA_MIN))
-      beta = BETA;
-  }
-
-  /* This code is pretty much taken directly from adafruits article on
-   * using a thermistor.
-   */
-  tmp2 = 1023.0f / (float)val - 1.0f;
-  tmp2 = RES / tmp2;
-
-  temp = tmp2 / (float)RES;
-  temp = log(temp);
-  temp /= BETA;
-  temp += 1.0f / (NOMTEMP + 273.15f);
-  temp = 1.0f / temp;
-  temp -= 273.15f;
-
-  return temp;
-}
-#endif
 
 struct rt {
   int32_t res;
@@ -82,6 +39,13 @@ struct rt rt_table[] = {
   { 531,    125 * SCALE_FACTOR }
 };
 
+
+void temperature_init_gpio(void)
+{
+  /* Set ADC input as tri-stated (input, no pull-up) */
+  pin_input(0, 0);
+}
+
 static uint32_t adc2res(uint16_t adc)
 {
   uint32_t res;
@@ -103,27 +67,24 @@ static int32_t adc2temp(uint16_t adc)
     ++i;
   }
 
-  if (i == sizeof(rt_table)/sizeof(rt_table[0]))
-    return 0;
-
-  if (i) {
-    k = (rt_table[i].t - rt_table[i-1].t) / (rt_table[i].res - rt_table[i-1].res);
-    m = rt_table[i].t - k * rt_table[i].res;
-    t = k*res + m;
-    /* Temp is scaled up by SCALE_FACTOR */
-    prints(PSTR("Temperature is: %ld\r\n"), t);
-    return t;
-  } else {
+  if ((i == 0) || (i == sizeof(rt_table)/sizeof(rt_table[0]))) {
     prints(PSTR("Invalid resistance: %lu\r\n"), res);
+    return 0;
   }
 
-  return 0;
+  k = (rt_table[i].t - rt_table[i-1].t) / (rt_table[i].res - rt_table[i-1].res);
+  m = rt_table[i].t - k * rt_table[i].res;
+  t = k*res + m;
+  /* Temp is scaled up by SCALE_FACTOR */
+  return t;
 }
 
 int32_t temperature_get(void)
 {
   uint16_t adc = adc_get();
-
-  return adc2temp(adc);
+  int32_t temp = adc2temp(adc);
+  /* Return temperature scaled up by 10 to give one decimal accuracy */
+  temp = (temp + 5000) / (SCALE_FACTOR/10);
+  return temp;
 }
 
