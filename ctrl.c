@@ -71,13 +71,6 @@ void ctrl_update(void)
   t_delay = atoi(tmp);
   t_delay *= 1000; /* Convert to ms */
 
-#if 0
-  if (t_delay < 0)
-      return;
-#endif
-
-  if (g_state != OFF)
-    prints(PSTR("Temperature: %d\r\n"), (int)round(temp*10));
 
   switch (g_state) {
   case OFF:
@@ -115,7 +108,6 @@ void ctrl_update(void)
       } else {
         prints(PSTR("Cooling delay... %lu\r\n"), t_delay - tdiff);
       }
-
     } else {
       /* Temp is within range, do nothing */
     }
