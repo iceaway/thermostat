@@ -8,15 +8,17 @@
 #include "main.h"
 #include "prints.h"
 
-enum ctrl_state {
-  OFF,
-  IDLE,
-  HEATING,
-  COOLING
-};
+#define T_MAX   500
+#define T_MIN   -100
+
 
 static int g_state = OFF;
 static uint32_t g_laston = 0;
+
+int ctrl_state(void)
+{
+  return g_state;
+}
 
 void ctrl_enable(void)
 {
@@ -38,17 +40,18 @@ int ctrl_status(void)
 void ctrl_update(void)
 {
   char tmp[16];
-  float t_set;
-  float t_hyst;
+  int t_set;
+  int t_hyst;
   uint32_t t_delay;
-  float temp = temperature_get();
+
+  int temp = temperature_get();
 
   if (env_get("T_SET", tmp, sizeof(tmp)) < 0) {
     return;
   }
-  
-  t_set = atof(tmp);
-  if ((t_set < 0.0f) || (t_set > 100.0f)) {
+
+  t_set = atoi(tmp);
+  if ((t_set < T_MIN) || (t_set > T_MAX)) {
     return;
   }
 
@@ -56,8 +59,8 @@ void ctrl_update(void)
     return;
   }
   
-  t_hyst = atof(tmp);
-  if (((t_set - t_hyst) < 0.0f) || ((t_set + t_hyst) > 100.0f)) {
+  t_hyst = atoi(tmp);
+  if (((t_set - t_hyst) < T_MIN) || ((t_set + t_hyst) > T_MAX)) {
     return;
   }
 

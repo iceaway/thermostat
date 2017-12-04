@@ -7,7 +7,7 @@ OBJCOPY=avr-objcopy
 CFLAGS=-Os -DF_CPU=16000000UL -mmcu=atmega328 -Wall -Wextra -Wl,-Map,main.map -pedantic
 #CFLAGS=-Os -DF_CPU=16000000UL -mmcu=atmega2560 -Wall -Wextra -Wl,-Map,main.map
 #PORT=/dev/ttyACM0
-PORT=/dev/ttyUSB0
+PORT=/dev/ttyUSB2
 
 ${BIN}.hex: ${BIN}.elf
 	${OBJCOPY} -O ihex -R .eeprom $< $@

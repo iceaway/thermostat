@@ -287,6 +287,29 @@ int cmd_ctrl(int argc, char *argv[])
   } else if (strcmp(argv[1], "status") == 0) {
     prints(PSTR("Control loop is: %s\r\n"),
            ctrl_status() == 0 ? "Disabled" : "Enabled");
+  } else if (strcmp(argv[1], "state") == 0) {
+    prints(PSTR("Control loop state is: "));
+    switch (ctrl_state()) {
+      case OFF:
+        prints(PSTR("Off"));
+        break;
+
+      case IDLE:
+        prints(PSTR("Idle"));
+        break;
+
+      case HEATING:
+        prints(PSTR("Heating"));
+        break;
+
+      case COOLING:
+        prints(PSTR("Cooling"));
+        break;
+
+      default:
+        prints(PSTR("Unknown"));
+    }
+    prints(PSTR("\r\n"));
   } else {
     prints(PSTR("Invalid argument: %s\r\n"), argv[1]);
     return -1;
@@ -304,7 +327,7 @@ void print_temp(void)
 int cmd_temp(int argc, char *argv[])
 {
   static uint8_t id;
-  float temp;
+  int temp;
   int interval;
   
   if (argc > 1) {
@@ -318,7 +341,7 @@ int cmd_temp(int argc, char *argv[])
   }
 
   temp = temperature_get();
-  prints(PSTR("Temperature: %d\r\n"), (int)round(temp*10));
+  prints(PSTR("Temperature: %d\r\n"), temp);
 
   return 0;
 }
@@ -774,7 +797,7 @@ int main(void)
   prints(PSTR("Restoring environment...\r\n"));
   env_restore(); /* TODO: This halts execution? */
 
-  sched_add_task(ctrl_update, 1, 1000, "ctrl");
+  sched_add_task(ctrl_update, 1, 500, "ctrl");
   ctrl_enable();
 
   prints(PSTR("\r\nWelcome to PellShell\r\n"));
